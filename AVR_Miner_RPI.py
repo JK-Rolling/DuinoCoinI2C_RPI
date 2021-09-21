@@ -660,6 +660,7 @@ def mine_avr(com, threadid, fastest_pool):
     global hashrate
     start_time = time()
     report_shares = 0
+    last_report_share = 0
     
     while True:
         
@@ -769,6 +770,8 @@ def mine_avr(com, threadid, fastest_pool):
                             i2c_rdata = chr(i2c_bus.read_byte(int(com, base=16)))
                         if ((i2c_rdata.isalnum()) or (',' in i2c_rdata)):
                             i2c_responses += i2c_rdata.strip()
+                        else:
+                            sleep(0.1)
                             
                         result = i2c_responses.split(',')
                         if ((len(result)==3) and ('\n' in i2c_rdata)):
@@ -776,7 +779,7 @@ def mine_avr(com, threadid, fastest_pool):
                             
                         i2c_end_time = time()
                         if (i2c_end_time - i2c_start_time) > Settings.AVR_TIMEOUT:
-                            flush_i2c(i2c_bus,com)
+                            flush_i2c(i2c_bus,com,5)
                             break
 
                     if result[0] and result[1]:
@@ -866,7 +869,7 @@ def mine_avr(com, threadid, fastest_pool):
             end_time = time()
             elapsed_time = end_time - start_time
             if threadid == 0 and elapsed_time >= Settings.REPORT_TIME:
-                report_shares = shares[0] - report_shares
+                report_shares = shares[0] - last_report_share
                 uptime = calculate_uptime(mining_start_time)
                 pretty_print("net" + str(threadid),
                                  " POOL_INFO: " + Fore.RESET
@@ -876,6 +879,7 @@ def mine_avr(com, threadid, fastest_pool):
                                 hashrate, uptime)
                 
                 start_time = time()
+                last_report_share = shares[0]
 
 
 def periodic_report(start_time, end_time, shares,
@@ -957,4 +961,3 @@ if __name__ == '__main__':
                 target=update_rich_presence).start()
         except Exception as e:
             debug_output(f'Error launching Discord RPC thread: {e}')
-
