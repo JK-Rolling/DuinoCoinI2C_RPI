@@ -765,7 +765,8 @@ def mine_avr(com, threadid, fastest_pool):
                     result = []
                     i2c_start_time = time()
                     while True:
-                        i2c_rdata = chr(i2c_bus.read_byte(int(com, base=16)))
+                        with thread_lock():
+                            i2c_rdata = chr(i2c_bus.read_byte(int(com, base=16)))
                         if ((i2c_rdata.isalnum()) or (',' in i2c_rdata)):
                             i2c_responses += i2c_rdata.strip()
                         else:
@@ -869,9 +870,13 @@ def mine_avr(com, threadid, fastest_pool):
             if threadid == 0 and elapsed_time >= Settings.REPORT_TIME:
                 report_shares = shares[0] - report_shares
                 uptime = calculate_uptime(mining_start_time)
-
+                pretty_print("net" + str(threadid),
+                                 " POOL_INFO: " + Fore.RESET
+                                 + Style.NORMAL + str(motd),
+                                 "success")
                 periodic_report(start_time, end_time, report_shares,
                                 hashrate, uptime)
+                
                 start_time = time()
 
 
