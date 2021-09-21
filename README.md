@@ -44,6 +44,8 @@ Slave addresses range from 0x3..0x77
 
 Google or refer to [raspberry-pi-i2c](https://pimylifeup.com/raspberry-pi-i2c/)
 
+**Note:** If you see bad shares, it could be due to a bug in [RPI I2C hardware](https://github.com/raspberrypi/linux/issues/254)
+
 # Connection Pinouts
 
 Connect the pins of the Raspberry PI on the Arduino like the table/images below, use a [Logic Level Converter](https://www.sparkfun.com/products/12009) to connect between the SBC and Arduino.
