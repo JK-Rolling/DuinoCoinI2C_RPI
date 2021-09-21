@@ -769,8 +769,6 @@ def mine_avr(com, threadid, fastest_pool):
                             i2c_rdata = chr(i2c_bus.read_byte(int(com, base=16)))
                         if ((i2c_rdata.isalnum()) or (',' in i2c_rdata)):
                             i2c_responses += i2c_rdata.strip()
-                        else:
-                            sleep(0.5)
                             
                         result = i2c_responses.split(',')
                         if ((len(result)==3) and ('\n' in i2c_rdata)):
