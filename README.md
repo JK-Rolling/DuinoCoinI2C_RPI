@@ -40,6 +40,10 @@ The code theoretically supports up to 117 clients on Raspberry PI
 
 Slave addresses range from 0x3..0x77
 
+## Enable I2C on Raspberry PI
+
+Google or refer to [raspberry-pi-i2c](https://pimylifeup.com/raspberry-pi-i2c/)
+
 # Connection Pinouts
 
 Connect the pins of the Raspberry PI on the Arduino like the table/images below, use a [Logic Level Converter](https://www.sparkfun.com/products/12009) to connect between the SBC and Arduino.
