@@ -212,7 +212,7 @@ class Donate:
                          'warning')
 
 
-shares = [0, 0]
+shares = [0, 0, 0]
 hashrate_mean = []
 ping_mean = []
 diff = 0
@@ -770,8 +770,12 @@ def mine_avr(com, threadid, fastest_pool):
                             i2c_rdata = chr(i2c_bus.read_byte(int(com, base=16)))
                         if ((i2c_rdata.isalnum()) or (',' in i2c_rdata)):
                             i2c_responses += i2c_rdata.strip()
+                        elif ('#' in i2c_rdata):
+                            flush_i2c(i2c_bus,com)
+                            #ondemand_print(com + f':Retry Job: {job[0]},{job[1]},{job[2]}')
+                            raise Exception("i2c data corrupted. retry")
                         else:
-                            sleep(0.1)
+                            sleep(0.01)
                             
                         result = i2c_responses.split(',')
                         if ((len(result)==3) and ('\n' in i2c_rdata)):
@@ -782,7 +786,7 @@ def mine_avr(com, threadid, fastest_pool):
                             flush_i2c(i2c_bus,com,5)
                             break
 
-                    if result[0] and result[1]:
+                    if result[0] and result[1] and result[2]:
                         _ = int(result[0])
                         debug_output(com + f': Result: {result[0]},{result[1]},{result[2]}')
                         break
@@ -808,7 +812,7 @@ def mine_avr(com, threadid, fastest_pool):
                              + f'{e}, please check the connection, '
                              + 'port setting or reset the AVR)', 'warning')
                 ondemand_print(com + f': Job: {job[0]},{job[1]},{job[2]}')
-                ondemand_print(com + f': Result: {result[0]},{result[1]},{result[2]}')
+                ondemand_print(com + f': Result: {result}')
                 flush_i2c(i2c_bus,com)
                 break
 
@@ -850,6 +854,7 @@ def mine_avr(com, threadid, fastest_pool):
                             computetime, diff, ping)
             elif feedback == 'BLOCK':
                 shares[0] += 1
+                shares[2] += 1
                 share_print(port_num(com), "block",
                             shares[0], shares[1], hashrate,
                             computetime, diff, ping)
@@ -876,14 +881,14 @@ def mine_avr(com, threadid, fastest_pool):
                                  + Style.NORMAL + str(motd),
                                  "success")
                 periodic_report(start_time, end_time, report_shares,
-                                hashrate, uptime)
+                                shares[2], hashrate, uptime)
                 
                 start_time = time()
                 last_report_share = shares[0]
 
 
 def periodic_report(start_time, end_time, shares,
-                    hashrate, uptime):
+                    block, hashrate, uptime):
     seconds = round(end_time - start_time)
     pretty_print("sys0",
                  " " + get_string('periodic_mining_report')
@@ -893,7 +898,9 @@ def periodic_report(start_time, end_time, shares,
                  + get_string('report_body1')
                  + str(shares) + get_string('report_body2')
                  + str(round(shares/seconds, 1))
-                 + get_string('report_body3') + get_string('report_body4')
+                 + get_string('report_body3')
+                 + "\n\t\t‖ Block found: " + str(block)
+                 + get_string('report_body4')
                  + str(int(hashrate)) + " H/s" + get_string('report_body5')
                  + str(int(hashrate*seconds)) + get_string('report_body6')
                  + get_string('total_mining_time') + str(uptime), "success")
