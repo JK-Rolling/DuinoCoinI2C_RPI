@@ -81,6 +81,13 @@ void requestEvent() {
   Wire.write(c);
 }
 
+void abort_loop()
+{
+    Serial.println("Detected invalid char. abort");
+    while (bufferReceive.available()) bufferReceive.read();
+    bufferRequest.print("#");
+}
+
 bool DuinoCoin_loop()
 {
   if (bufferReceive.available() > 0 && bufferReceive.indexOf('\n') != -1) {
@@ -88,15 +95,24 @@ bool DuinoCoin_loop()
     Serial.print(F("Job: "));
     Serial.print(bufferReceive);
     
-    String local_bufferReceive = bufferReceive.readStringUntil('\n');
-    while (bufferReceive.available()) bufferReceive.read();
-    local_bufferReceive = str_sanitize(local_bufferReceive);
-    StreamString received;
-    received.print(local_bufferReceive);
-
-    String lastblockhash = received.readStringUntil(',');
-    String newblockhash = received.readStringUntil(',');
-    unsigned int difficulty = received.readStringUntil('\n').toInt();
+    String lastblockhash = bufferReceive.readStringUntil(',');
+    if (check(lastblockhash))
+    {
+        abort_loop();
+        return false;
+    }
+    String newblockhash = bufferReceive.readStringUntil(',');
+    if (check(newblockhash))
+    {
+        abort_loop();
+        return false;
+    }
+    unsigned int difficulty = bufferReceive.readStringUntil('\n').toInt();
+    if (difficulty == 0)
+    {
+        abort_loop();
+        return false;
+    }
     
     
     // Start time measurement
@@ -113,7 +129,7 @@ bool DuinoCoin_loop()
     bufferRequest.print(String(ducos1result) + "," + String(elapsedTime) + "," + String(get_DUCOID()) + "\n");
 
     Serial.print(F("Done "));
-    Serial.print(String(ducos1result) + "," + String(elapsedTime) + "," + String(get_DUCOID()) + "\n");
+    Serial.println(String(ducos1result) + "," + String(elapsedTime) + "," + String(get_DUCOID()) + "\n");
     
     return true;
   }
