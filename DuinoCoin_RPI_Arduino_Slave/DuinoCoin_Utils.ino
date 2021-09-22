@@ -93,19 +93,14 @@ byte getTrueRotateRandomByte() {
   return lastByte ^ leftStack ^ rightStack;
 }
 
-String str_sanitize(String message)
+bool check(String message)
 {
-    String cleaned_msg = "";
     for (int i = 0; i < message.length(); i++)
     {
-        if ((isalnum(message[i])) || (message[i] == '\n') || (message[i] == ','))
+        if (!(isHexadecimalDigit(message[i])))
         {
-            cleaned_msg += message[i];
-        }
-        else
-        {
-            cleaned_msg = "";
+            return true;
         }
     }
-    return cleaned_msg;
+    return false;
 }
