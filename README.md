@@ -3,6 +3,29 @@ This project design to mine [Duino-Coin](https://github.com/revoxhere/duino-coin
 
 Using the I2C communication to connect all the boards and make a scalable communication between the master and the slaves.
 
+## Python Environment Setup
+
+### Linux
+
+```BASH
+sudo apt update
+sudo apt install python3 python3-pip git -y # Install dependencies
+git clone https://github.com/JK-Rolling/DuinoCoinI2C_RPI.git # Clone DuinoCoinI2C_RPI repository
+cd DuinoCoinI2C_RPI
+python3 -m pip install -r requirements.txt # Install pip dependencies
+````
+
+Finally, connect your I2C AVR miner and launch the software (e.g. `python3 ./AVR_Miner_RPI.py`)
+
+### Windows
+
+1. Download and install [Python 3](https://www.python.org/downloads/) (add Python and Pip to Windows PATH)
+2. Download [the DuinoCoinI2C_RPI](https://github.com/JK-Rolling/DuinoCoinI2C_RPI/releases)
+3. Extract the zip archive you've downloaded and open the folder in command prompt
+4. In command prompt type `py -m pip install -r requirements.txt` to install required pip dependencies
+
+Finally, connect your I2C AVR miner and launch the software (e.g. `python3 ./AVR_Miner_RPI.py` or `py AVR_Miner_RPI.py` in the command prompt)
+
 ## Version
 
 DuinoCoinI2C_RPI Version 2.73
@@ -56,3 +79,7 @@ Connect the pins of the Raspberry PI on the Arduino like the table/images below,
 ||GND | <---> | GND |
 |`SDA`| PIN 3 | <---> | A4 |
 |`SCL`| PIN 5 | <---> | A5 |
+
+# License and Terms of service
+
+All refers back to original [Duino-Coin licensee and terms of service](https://github.com/revoxhere/duino-coin)
