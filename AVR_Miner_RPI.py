@@ -772,7 +772,7 @@ def mine_avr(com, threadid, fastest_pool):
                             i2c_responses += i2c_rdata.strip()
                         elif ('#' in i2c_rdata):
                             flush_i2c(i2c_bus,com)
-                            #ondemand_print(com + f': Retry: {retry_counter} Job: {job}')
+                            debug_output(com + f': Retry Job: {job}')
                             raise Exception("I2C data corrupted")
                         else:
                             sleep(0.01)
@@ -816,9 +816,9 @@ def mine_avr(com, threadid, fastest_pool):
                              + ' (no response from the board: '
                              + f'{e}, please check the connection, '
                              + 'port setting or reset the AVR)', 'warning')
-                ondemand_print(com + f': Retry count: {retry_counter}')
-                ondemand_print(com + f': Job: {job}')
-                ondemand_print(com + f': Result: {result}')
+                debug_output(com + f': Retry count: {retry_counter}')
+                debug_output(com + f': Job: {job}')
+                debug_output(com + f': Result: {result}')
                 flush_i2c(i2c_bus,com)
                 break
 
@@ -869,8 +869,8 @@ def mine_avr(com, threadid, fastest_pool):
                 share_print(port_num(com), "reject",
                             shares[0], shares[1], hashrate,
                             computetime, diff, ping)
-                ondemand_print(com + f': Job: {job[0]},{job[1]},{job[2]}')
-                ondemand_print(com + f': Result: {result[0]},{result[1]},{result[2]}')
+                debug_output(com + f': Job: {job}')
+                debug_output(com + f': Result: {result}')
                 flush_i2c(i2c_bus,com,5)
 
             title(get_string('duco_avr_miner') + str(Settings.VER)
@@ -974,4 +974,3 @@ if __name__ == '__main__':
                 target=update_rich_presence).start()
         except Exception as e:
             debug_output(f'Error launching Discord RPC thread: {e}')
-
