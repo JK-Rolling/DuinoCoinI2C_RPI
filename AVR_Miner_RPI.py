@@ -744,7 +744,7 @@ def mine_avr(com, threadid, fastest_pool):
 
             retry_counter = 0
             while True:
-                if retry_counter > 3:
+                if retry_counter > 10:
                     flush_i2c(i2c_bus,com)
                     break
 
@@ -772,8 +772,8 @@ def mine_avr(com, threadid, fastest_pool):
                             i2c_responses += i2c_rdata.strip()
                         elif ('#' in i2c_rdata):
                             flush_i2c(i2c_bus,com)
-                            #ondemand_print(com + f':Retry Job: {job}')
-                            raise Exception("I2C data corrupted. Retrying..")
+                            #ondemand_print(com + f': Retry: {retry_counter} Job: {job}')
+                            raise Exception("I2C data corrupted")
                         else:
                             sleep(0.01)
                             
@@ -783,11 +783,16 @@ def mine_avr(com, threadid, fastest_pool):
                             
                         i2c_end_time = time()
                         if (i2c_end_time - i2c_start_time) > Settings.AVR_TIMEOUT:
-                            flush_i2c(i2c_bus,com,5)
-                            raise Exception("I2C timed out. Retrying..")
+                            flush_i2c(i2c_bus,com)
+                            raise Exception("I2C timed out")
 
                     if result[0] and result[1]:
                         _ = int(result[0])
+                        if not _:
+                            raise Exception("Invalid result")
+                        _ = int(result[1])
+                        if not result[2].isalnum():
+                            raise Exception("Corrupted DUCOID")
                         debug_output(com + f': Result: {result}')
                         break
                     else:
@@ -811,8 +816,9 @@ def mine_avr(com, threadid, fastest_pool):
                              + ' (no response from the board: '
                              + f'{e}, please check the connection, '
                              + 'port setting or reset the AVR)', 'warning')
-                #ondemand_print(com + f': Job: {job}')
-                #ondemand_print(com + f': Result: {result}')
+                ondemand_print(com + f': Retry count: {retry_counter}')
+                ondemand_print(com + f': Job: {job}')
+                ondemand_print(com + f': Result: {result}')
                 flush_i2c(i2c_bus,com)
                 break
 
@@ -968,3 +974,4 @@ if __name__ == '__main__':
                 target=update_rich_presence).start()
         except Exception as e:
             debug_output(f'Error launching Discord RPC thread: {e}')
+
