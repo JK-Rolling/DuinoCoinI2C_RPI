@@ -9,11 +9,13 @@ Using the I2C communication to connect all the boards and make a scalable commun
 
 ```BASH
 sudo apt update
-sudo apt install python3 python3-pip git -y # Install dependencies
+sudo apt install python3 python3-pip git i2c-tools python3-smbus -y # Install dependencies
 git clone https://github.com/JK-Rolling/DuinoCoinI2C_RPI.git # Clone DuinoCoinI2C_RPI repository
 cd DuinoCoinI2C_RPI
 python3 -m pip install -r requirements.txt # Install pip dependencies
 ````
+
+Use `sudo raspi-config` to enable I2C. Refer detailed steps at [raspberry-pi-i2c](https://pimylifeup.com/raspberry-pi-i2c/)
 
 Finally, connect your I2C AVR miner and launch the software (e.g. `python3 ./AVR_Miner_RPI.py`)
 
