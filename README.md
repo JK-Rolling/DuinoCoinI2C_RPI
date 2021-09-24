@@ -9,7 +9,7 @@ Using the I2C communication to connect all the boards and make a scalable commun
 
 ```BASH
 sudo apt update
-sudo apt install python3 python3-pip git i2c-tools python3-smbus -y # Install dependencies
+sudo apt install python3 python3-pip git i2c-tools python3-smbus screen -y # Install dependencies
 git clone https://github.com/JK-Rolling/DuinoCoinI2C_RPI.git # Clone DuinoCoinI2C_RPI repository
 cd DuinoCoinI2C_RPI
 python3 -m pip install -r requirements.txt # Install pip dependencies
