@@ -3,6 +3,10 @@ This project design to mine [Duino-Coin](https://github.com/revoxhere/duino-coin
 
 Using the I2C communication to connect all the boards and make a scalable communication between the master and the slaves.
 
+## Video Tutorial
+
+Raspberry Pi AVR I2C [tutorial video](https://youtu.be/bZ2XwPpYtiw)
+
 ## Python Environment Setup
 
 ### Linux
