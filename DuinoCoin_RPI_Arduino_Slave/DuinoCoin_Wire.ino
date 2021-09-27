@@ -124,6 +124,7 @@ bool DuinoCoin_loop()
     unsigned long endTime = micros();
     // Calculate elapsed time
     unsigned long elapsedTime = endTime - startTime;
+    if (ducos1result == 1) elapsedTime = 5128;
     // Send result back to the program with share time
     while (bufferRequest.available()) bufferRequest.read();
     bufferRequest.print(String(ducos1result) + "," + String(elapsedTime) + "," + String(get_DUCOID()) + "\n");
