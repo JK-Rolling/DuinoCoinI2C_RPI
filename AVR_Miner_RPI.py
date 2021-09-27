@@ -650,7 +650,10 @@ def flush_i2c(i2c_bus,com,period=2):
     i2c_flush_start = time()
     with thread_lock():
         while True:
-            i2c_bus.read_byte(int(com, base=16))
+            try:
+                i2c_bus.read_byte(int(com, base=16))
+            except:
+                pass
             
             i2c_flush_end = time()
             if (i2c_flush_end - i2c_flush_start) > period:
