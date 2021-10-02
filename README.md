@@ -5,7 +5,9 @@ Using the I2C communication to connect all the boards and make a scalable commun
 
 ## Video Tutorial
 
-Raspberry Pi AVR I2C [tutorial video](https://youtu.be/bZ2XwPpYtiw)
+Raspberry Pi AVR I2C Bus 1 [tutorial video](https://youtu.be/bZ2XwPpYtiw)
+
+Raspberry Pi AVR I2C Bus 0 [tutorial video](https://youtu.be/ywO7j4yqIlg)
 
 ## Python Environment Setup
 
@@ -20,6 +22,8 @@ python3 -m pip install -r requirements.txt # Install pip dependencies
 ````
 
 Use `sudo raspi-config` to enable I2C. Refer detailed steps at [raspberry-pi-i2c](https://pimylifeup.com/raspberry-pi-i2c/)
+
+For RPI I2C Bus 0, extra step is needed, `sudo nano /boot/config.txt` and add `dtparam=i2c_vc=on`, save and reboot
 
 Finally, connect your I2C AVR miner and launch the software (e.g. `python3 ./AVR_Miner_RPI.py`)
 
@@ -72,6 +76,10 @@ Slave addresses range from 0x3..0x77
 ## Enable I2C on Raspberry PI
 
 Google or refer to [raspberry-pi-i2c](https://pimylifeup.com/raspberry-pi-i2c/)
+
+For RPI I2C Bus 0, there might not be pull up resistor built in. It relies on the pull up from Nano.
+
+For other I2C slave that do not have pull up capability, add 2KOhm resistor to both SDA and SCL line on I2C bus 0.
 
 **Note:** If you see bad shares, it could be due to a bug in [RPI I2C hardware](https://github.com/raspberrypi/linux/issues/254)
 
