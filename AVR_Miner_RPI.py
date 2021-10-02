@@ -363,6 +363,7 @@ def load_config():
     global discord_presence
     global shuffle_ports
     global SOC_TIMEOUT
+    global i2c
 
     if not Path(str(Settings.DATA_DIR) + '/Settings.cfg').is_file():
         print(
@@ -379,8 +380,14 @@ def load_config():
             Style.RESET_ALL + Fore.YELLOW
             + get_string('ask_username')
             + Fore.RESET + Style.BRIGHT)
+            
+        i2c = input(
+            Style.RESET_ALL + Fore.YELLOW
+            + 'Enter your choice of I2C bus (e.g. 1): '
+            + Fore.RESET + Style.BRIGHT)
+        i2c = int(i2c)
 
-        if ossystem('i2cdetect -y 1') is not 0 :
+        if ossystem(f'i2cdetect -y {i2c}') != 0:
             print(Style.RESET_ALL + Fore.RED
                     + 'I2C is disabled. Exiting..')
         else :
@@ -445,7 +452,8 @@ def load_config():
             "avr_timeout":      10,
             "discord_presence": "y",
             "periodic_report":  60,
-            "shuffle_ports":    "y"}
+            "shuffle_ports":    "y",
+            "i2c":              i2c}
 
         with open(str(Settings.DATA_DIR)
                   + '/Settings.cfg', 'w') as configfile:
@@ -467,6 +475,7 @@ def load_config():
         discord_presence = config["AVR Miner"]["discord_presence"]
         shuffle_ports = config["AVR Miner"]["shuffle_ports"]
         Settings.REPORT_TIME = int(config["AVR Miner"]["periodic_report"])
+        i2c = int(config["AVR Miner"]["i2c"])
 
 
 def greeting():
@@ -488,11 +497,10 @@ def greeting():
     print(
         Style.DIM + Fore.MAGENTA
         + Settings.BLOCK + Fore.YELLOW
-        + Style.BRIGHT + get_string('banner')
-        + Style.BRIGHT + 'Unofficial Duino-Coin RPI I2C  AVR Miner'
+        + Style.BRIGHT + '\n  Unofficial Duino-Coin RPI I2C  AVR Miner'
         + Style.RESET_ALL + Fore.MAGENTA
         + f' {Settings.VER}' + Fore.RESET
-        + ' 2019-2021')
+        + ' 2021')
 
     print(
         Style.DIM + Fore.MAGENTA
@@ -959,7 +967,7 @@ if __name__ == '__main__':
             debug_output(f'Error launching donation thread: {e}')
 
     try:
-        i2c_bus = SMBus(1)
+        i2c_bus = SMBus(i2c)
         fastest_pool = Client.fetch_pool()
         threadid = 0
         for port in avrport:
