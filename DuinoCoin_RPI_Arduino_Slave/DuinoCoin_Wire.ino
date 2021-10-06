@@ -18,7 +18,23 @@
 // comment out to use as common code across all arduino. **USE AT YOUR OWN RISK**
 #define DEV_INDEX 0
 
-byte i2c = 3;
+// change this start address to suit your SBC usable I2C address
+#define I2CS_START_ADDRESS 3
+
+/* typical i2cdetect printout. showing example of 10 I2CS
+$ i2cdetect -y 1
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:          03 04 05 06 07 08 09 0a 0b 0c -- -- --
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+70: -- -- -- -- -- -- -- --
+*/
+
+byte i2c = I2CS_START_ADDRESS;
 StreamString bufferReceive;
 StreamString bufferRequest;
 
@@ -38,8 +54,8 @@ void DuinoCoin_setup()
   #endif
   
   Wire.begin();
-  // RPI I2C address starts from 0x3
-  for (int address = 3; address < 119; address++ )
+  // RPI I2C address starts from 0x3 to 0x77
+  for (int address = I2CS_START_ADDRESS; address < 119; address++ )
   {
     Wire.beginTransmission(address);
     int error = Wire.endTransmission();
