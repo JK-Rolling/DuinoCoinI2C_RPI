@@ -135,7 +135,17 @@ class Client:
             try:
                 response = requests.get(
                     "https://server.duinocoin.com/getPool").json()
+                    
+                                                   
+                                     
+                                                
+                                          
+                                                
+                                    
+                                             
+                                         
                 if response["success"] == True:
+                        
                     NODE_ADDRESS = response["ip"]
                     NODE_PORT = response["port"]
                     debug_output(f"Fetched pool: {response['name']}")
@@ -167,6 +177,7 @@ class Donate:
                               'wb') as f:
                         f.write(r.content)
             elif osname == "posix":
+                    
                 if osprocessor() == "aarch64":
                     url = ('https://server.duinocoin.com/'
                            + 'donations/DonateExecutableAARCH64')
@@ -189,6 +200,7 @@ class Donate:
                    + '-o stratum+tcp://xmg.minerclaim.net:3333 '
                    + f'-u revox.donate -p x -s 4 -e {donation_level*5}')
         elif osname == 'posix':
+                
             cmd = (f'cd "{Settings.DATA_DIR}" && chmod +x Donate '
                    + '&& nice -20 ./Donate -o '
                    + 'stratum+tcp://xmg.minerclaim.net:3333 '
@@ -213,6 +225,8 @@ class Donate:
 
 
 shares = [0, 0, 0]
+bad_crc8 = 0
+i2c_retry_count = 0
 hashrate_mean = []
 ping_mean = []
 diff = 0
@@ -667,11 +681,29 @@ def flush_i2c(i2c_bus,com,period=2):
             if (i2c_flush_end - i2c_flush_start) > period:
                 break
 
+def crc8(data):
+    crc = 0
+    for i in range(len(data)):
+        byte = data[i]
+        for b in range(8):
+            fb_bit = (crc ^ byte) & 0x01
+            if fb_bit == 0x01:
+                crc = crc ^ 0x18
+            crc = (crc >> 1) & 0x7f
+            if fb_bit == 0x01:
+                crc = crc | 0x80
+            byte = byte >> 1
+    return crc
+
 def mine_avr(com, threadid, fastest_pool):
     global hashrate
+    global bad_crc8
+    global i2c_retry_count
     start_time = time()
     report_shares = 0
     last_report_share = 0
+    last_bad_crc8 = 0
+    last_i2c_retry_count = 0
     
     while True:
         
@@ -766,8 +798,10 @@ def mine_avr(com, threadid, fastest_pool):
                                     + job[1]
                                     + Settings.SEPARATOR
                                     + job[2]
-                                    + Settings.SEPARATOR
-                                    + '\n')
+                                    + Settings.SEPARATOR)
+                                    
+                    i2c_data = str(i2c_data + str(crc8(i2c_data.encode())) + '\n')
+                    debug_output(com + f': Job+crc8: {i2c_data}')
                                     
                     with thread_lock():
                         for i in range(0, len(i2c_data)):
@@ -776,41 +810,53 @@ def mine_avr(com, threadid, fastest_pool):
                     i2c_responses = ''
                     result = []
                     i2c_start_time = time()
+                    sleep_en = True
                     while True:
                         with thread_lock():
                             i2c_rdata = chr(i2c_bus.read_byte(int(com, base=16)))
                         if ((i2c_rdata.isalnum()) or (',' in i2c_rdata)):
+                            sleep_en = False
                             i2c_responses += i2c_rdata.strip()
                         elif ('#' in i2c_rdata):
                             flush_i2c(i2c_bus,com)
                             debug_output(com + f': Retry Job: {job}')
                             raise Exception("I2C data corrupted")
-                        else:
+                        elif sleep_en:
                             sleep(0.01)
                             
                         result = i2c_responses.split(',')
-                        if ((len(result)==3) and ('\n' in i2c_rdata)):
+                        if ((len(result)==4) and ('\n' in i2c_rdata)):
+                            debug_output(com + " i2c_responses:" + f'{i2c_responses}')
                             break
                             
                         i2c_end_time = time()
                         if (i2c_end_time - i2c_start_time) > Settings.AVR_TIMEOUT:
                             flush_i2c(i2c_bus,com)
+                            debug_output(com + ' I2C timed out')
                             raise Exception("I2C timed out")
 
                     if result[0] and result[1]:
                         _ = int(result[0])
                         if not _:
+                            debug_output(com + ' Invalid result')
                             raise Exception("Invalid result")
                         _ = int(result[1])
                         if not result[2].isalnum():
+                            debug_output(com + ' Corrupted DUCOID')
                             raise Exception("Corrupted DUCOID")
-                        debug_output(com + f': Result: {result}')
+                        _resp = i2c_responses.rpartition(Settings.SEPARATOR)[0]+Settings.SEPARATOR
+                        result_crc8 = crc8(_resp.encode())
+                        if int(result[3]) != result_crc8:
+                            bad_crc8 += 1
+                            debug_output(com + f': crc8:: expect:{result_crc8} measured:{result[3]}')
+                            raise Exception("crc8 checksum failed")
                         break
                     else:
                         raise Exception("No data received from AVR")
                 except Exception as e:
                     debug_output(com + f': Retrying data read: {e}')
                     retry_counter += 1
+                    i2c_retry_count += 1
                     continue
 
             try:
@@ -892,20 +938,25 @@ def mine_avr(com, threadid, fastest_pool):
             elapsed_time = end_time - start_time
             if threadid == 0 and elapsed_time >= Settings.REPORT_TIME:
                 report_shares = shares[0] - last_report_share
+                report_bad_crc8 = bad_crc8 - last_bad_crc8
+                report_i2c_retry_count = i2c_retry_count - last_i2c_retry_count
                 uptime = calculate_uptime(mining_start_time)
                 pretty_print("net" + str(threadid),
                                  " POOL_INFO: " + Fore.RESET
                                  + Style.NORMAL + str(motd),
                                  "success")
                 periodic_report(start_time, end_time, report_shares,
-                                shares[2], hashrate, uptime)
+                                shares[2], hashrate, uptime, 
+                                report_bad_crc8, report_i2c_retry_count)
                 
                 start_time = time()
                 last_report_share = shares[0]
+                last_bad_crc8 = bad_crc8
+                last_i2c_retry_count = i2c_retry_count
 
 
 def periodic_report(start_time, end_time, shares,
-                    block, hashrate, uptime):
+                    block, hashrate, uptime, bad_crc8, i2c_retry_count):
     seconds = round(end_time - start_time)
     pretty_print("sys0",
                  " " + get_string('periodic_mining_report')
@@ -920,7 +971,9 @@ def periodic_report(start_time, end_time, shares,
                  + get_string('report_body4')
                  + str(int(hashrate)) + " H/s" + get_string('report_body5')
                  + str(int(hashrate*seconds)) + get_string('report_body6')
-                 + get_string('total_mining_time') + str(uptime), "success")
+                 + get_string('total_mining_time') + str(uptime)
+                 + "\n\t\t‖ CRC8 Error Rate: " + str(round(bad_crc8/seconds, 6)) + " E/s"
+                 + "\n\t\t‖ I2C Retry Rate: " + str(round(i2c_retry_count/seconds, 6)) + " R/s", "success")
 
 
 def calculate_uptime(start_time):
