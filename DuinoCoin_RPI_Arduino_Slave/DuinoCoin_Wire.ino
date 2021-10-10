@@ -123,13 +123,20 @@ bool DuinoCoin_loop()
         abort_loop();
         return false;
     }
-    unsigned int difficulty = bufferReceive.readStringUntil('\n').toInt();
+    unsigned int difficulty = bufferReceive.readStringUntil(',').toInt();
     if (difficulty == 0)
     {
         abort_loop();
         return false;
     }
-    
+    uint8_t crc8hash= bufferReceive.readStringUntil('\n').toInt();
+    String data = lastblockhash + "," + newblockhash + "," + String(difficulty) + ",";
+    if (crc8hash != str_crc8(data))
+    {
+        abort_loop();
+        return false;
+    }
+        
     
     // Start time measurement
     unsigned long startTime = micros();
@@ -143,10 +150,13 @@ bool DuinoCoin_loop()
     if (ducos1result == 1) elapsedTime = 5128;
     // Send result back to the program with share time
     while (bufferRequest.available()) bufferRequest.read();
-    bufferRequest.print(String(ducos1result) + "," + String(elapsedTime) + "," + String(get_DUCOID()) + "\n");
+
+    String result = String(ducos1result) + "," + String(elapsedTime) + "," + String(get_DUCOID()) + ",";
+    result = result + String(str_crc8(result));
+    bufferRequest.print(result + "\n");
 
     Serial.print(F("Done "));
-    Serial.println(String(ducos1result) + "," + String(elapsedTime) + "," + String(get_DUCOID()) + "\n");
+    Serial.println(result + "\n");
     
     return true;
   }
