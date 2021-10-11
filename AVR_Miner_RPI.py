@@ -822,7 +822,8 @@ def mine_avr(com, threadid, fastest_pool):
                             debug_output(com + f': Retry Job: {job}')
                             raise Exception("I2C data corrupted")
                         elif sleep_en:
-                            sleep(0.01)
+                            # feel free to play around this number to find sweet spot for shares/s vs. stability
+                            sleep(0.05)
                             
                         result = i2c_responses.split(',')
                         if ((len(result)==4) and ('\n' in i2c_rdata)):
