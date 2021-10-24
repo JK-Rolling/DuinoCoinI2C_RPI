@@ -102,6 +102,9 @@ void abort_loop()
     Serial.println("Detected invalid char. abort");
     while (bufferReceive.available()) bufferReceive.read();
     bufferRequest.print("#");
+    #ifdef WDT_EN
+      wdt_reset();
+    #endif
 }
 
 bool DuinoCoin_loop()
