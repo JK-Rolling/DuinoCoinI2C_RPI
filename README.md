@@ -44,6 +44,16 @@ DuinoCoinI2C_RPI Version 2.73
 
 All Slaves have the same code and should select the I2C Address automatically.
 
+Occasionally slaves might hang and not responding to master. quick workaround is to press the reset button on the slave to bring it back.
+
+Once in a blue moon, one of the slave might pull down the whole bus with it. power cycling the rig is the fastest way to bring it back.
+
+To solve these issues permanently, update Nano with Optiboot bootloader. WDT will auto reset the board if there is no activity within 8s.
+
+Uncomment this line to activate the WDT. works for Nano clone as well. **make sure the Nano is using Optiboot**
+
+`#define WDT_EN "Optiboot"`
+
 
 ## Library Dependency
 
