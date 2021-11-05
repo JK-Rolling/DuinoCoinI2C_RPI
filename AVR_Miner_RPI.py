@@ -858,6 +858,7 @@ def mine_avr(com, threadid, fastest_pool):
                     debug_output(com + f': Retrying data read: {e}')
                     retry_counter += 1
                     i2c_retry_count += 1
+                    flush_i2c(i2c_bus,com,1)
                     continue
 
             try:
