@@ -79,9 +79,11 @@ After the job is done, the slave sends back the response to the master (SBC) and
 
 ## Max Client/Slave
 
-The code theoretically supports up to 117 clients on Raspberry PI
+The code theoretically supports up to 117 clients on Raspberry PI on single I2C bus
 
 Slave addresses range from 0x3..0x77
+
+RPi have 2 I2C buses which bring up the count up to 234. This requires 2 separate instances of Python miner with it's own Settings.cfg file. Duplicate the directory into 2 and start the setup from there.
 
 ## Enable I2C on Raspberry PI
 
