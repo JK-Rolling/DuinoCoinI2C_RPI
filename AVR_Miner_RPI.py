@@ -37,7 +37,8 @@ import pip
 from subprocess import DEVNULL, Popen, check_call, call
 from threading import Thread as thrThread
 from threading import Lock as thread_lock
-
+from threading import Semaphore
+printlock = Semaphore(value=1)
 
 def install(package):
     try:
@@ -135,15 +136,6 @@ class Client:
             try:
                 response = requests.get(
                     "https://server.duinocoin.com/getPool").json()
-                    
-                                                   
-                                     
-                                                
-                                          
-                                                
-                                    
-                                             
-                                         
                 if response["success"] == True:
                         
                     NODE_ADDRESS = response["ip"]
@@ -623,9 +615,11 @@ def pretty_print(sender: str = "sys0",
         fg_color = Fore.YELLOW
 
     with thread_lock():
+        printlock.acquire()
         print(Fore.WHITE + datetime.now().strftime(Style.DIM + "%H:%M:%S ")
               + bg_color + Style.BRIGHT + " " + sender + " "
               + Back.RESET + " " + fg_color + msg.strip())
+        printlock.release()
 
 
 def share_print(id, type, accept, reject, total_hashrate,
@@ -655,6 +649,7 @@ def share_print(id, type, accept, reject, total_hashrate,
         fg_color = Fore.RED
 
     with thread_lock():
+        printlock.acquire()
         print(Fore.WHITE + datetime.now().strftime(Style.DIM + "%H:%M:%S ")
               + Fore.WHITE + Style.BRIGHT + Back.MAGENTA + Fore.RESET
               + " avr" + str(id) + " " + Back.RESET
@@ -667,6 +662,7 @@ def share_print(id, type, accept, reject, total_hashrate,
               + str(total_hashrate) + Fore.RESET + Style.NORMAL
               + Settings.COG + f" diff {diff}  " + Fore.CYAN
               + f"ping {(int(ping))}ms")
+        printlock.release()
 
 def flush_i2c(i2c_bus,com,period=2):
     i2c_flush_start = time()
