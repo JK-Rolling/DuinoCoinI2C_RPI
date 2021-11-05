@@ -813,7 +813,11 @@ def mine_avr(com, threadid, fastest_pool):
                     sleep_en = True
                     while True:
                         with thread_lock():
-                            i2c_rdata = chr(i2c_bus.read_byte(int(com, base=16)))
+                            try:
+                                i2c_rdata = chr(i2c_bus.read_byte(int(com, base=16)))
+                            except Exception as e:
+                                debug_output(com + f': {e}')
+                                pass
                         if ((i2c_rdata.isalnum()) or (',' in i2c_rdata)):
                             sleep_en = False
                             i2c_responses += i2c_rdata.strip()
@@ -858,7 +862,7 @@ def mine_avr(com, threadid, fastest_pool):
                     debug_output(com + f': Retrying data read: {e}')
                     retry_counter += 1
                     i2c_retry_count += 1
-                    flush_i2c(i2c_bus,com,1)
+                    #flush_i2c(i2c_bus,com,1)
                     continue
 
             try:
