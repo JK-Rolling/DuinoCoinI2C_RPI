@@ -35,7 +35,7 @@ import select
 import pip
 
 from subprocess import DEVNULL, Popen, check_call, call
-from threading import Thread as thrThread
+from threading import Thread
 from threading import Lock as thread_lock
 from threading import Semaphore
 printlock = Semaphore(value=1)
@@ -95,20 +95,20 @@ def port_num(com):
 
 
 class Settings:
-    VER = '2.73'
+    VER = '2.74'
     SOC_TIMEOUT = 45
     REPORT_TIME = 60
     AVR_TIMEOUT = 4  # diff 6 * 100 / 196 h/s = 3.06
     DATA_DIR = "Duino-Coin AVR Miner " + str(VER)
     SEPARATOR = ","
     ENCODING = "utf-8"
-    BLOCK = "  "
+    BLOCK = " ‖ "
     PICK = ""
     COG = " @"
     if osname != "nt":
         # Windows' cmd does not support emojis, shame!
-        PICK = " "
-        COG = " "
+        PICK = " ⛏"
+        COG = " ⚙"
 
 
 class Client:
@@ -137,7 +137,6 @@ class Client:
                 response = requests.get(
                     "https://server.duinocoin.com/getPool").json()
                 if response["success"] == True:
-                        
                     NODE_ADDRESS = response["ip"]
                     NODE_PORT = response["port"]
                     debug_output(f"Fetched pool: {response['name']}")
@@ -169,7 +168,6 @@ class Donate:
                               'wb') as f:
                         f.write(r.content)
             elif osname == "posix":
-                    
                 if osprocessor() == "aarch64":
                     url = ('https://server.duinocoin.com/'
                            + 'donations/DonateExecutableAARCH64')
@@ -192,7 +190,6 @@ class Donate:
                    + '-o stratum+tcp://xmg.minerclaim.net:3333 '
                    + f'-u revox.donate -p x -s 4 -e {donation_level*5}')
         elif osname == 'posix':
-                
             cmd = (f'cd "{Settings.DATA_DIR}" && chmod +x Donate '
                    + '&& nice -20 ./Donate -o '
                    + 'stratum+tcp://xmg.minerclaim.net:3333 '
@@ -266,16 +263,24 @@ try:
             lang = 'russian'
         elif locale.startswith('pl'):
             lang = 'polish'
+        elif locale.startswith('de'):
+            lang = 'german'
         elif locale.startswith('fr'):
             lang = 'french'
         elif locale.startswith('tr'):
             lang = 'turkish'
+        elif locale.startswith('it'):
+            lang = 'italian'
         elif locale.startswith('pt'):
             lang = 'portuguese'
         elif locale.startswith('zh'):
             lang = 'chinese_simplified'
         elif locale.startswith('th'):
             lang = 'thai'
+        elif locale.startswith('az'):
+            lang = 'azerbaijani'
+        elif locale.startswith('nl'):
+            lang = 'dutch'
         else:
             lang = 'english'
     else:
@@ -364,6 +369,7 @@ def load_config():
     global username
     global donation_level
     global avrport
+    global hashrate_list
     global debug
     global rig_identifier
     global discord_presence
@@ -467,6 +473,7 @@ def load_config():
 
         avrport = avrport.split(',')
         print(Style.RESET_ALL + get_string('config_saved'))
+        hashrate_list = [0] * len(avrport)
 
     else:
         config.read(str(Settings.DATA_DIR) + '/Settings.cfg')
@@ -481,6 +488,7 @@ def load_config():
         discord_presence = config["AVR Miner"]["discord_presence"]
         shuffle_ports = config["AVR Miner"]["shuffle_ports"]
         Settings.REPORT_TIME = int(config["AVR Miner"]["periodic_report"])
+        hashrate_list = [0] * len(avrport)
         i2c = int(config["AVR Miner"]["i2c"])
 
 
@@ -540,7 +548,7 @@ def greeting():
         + Settings.BLOCK + Style.NORMAL
         + Fore.RESET + get_string('algorithm')
         + Style.BRIGHT + Fore.YELLOW
-        + 'DUCO-S1A  AVR diff')
+        + 'DUCO-S1A ⚙ AVR diff')
 
     if rig_identifier != "None":
         print(
@@ -561,9 +569,9 @@ def init_rich_presence():
     # Initialize Discord rich presence
     global RPC
     try:
-        RPC = Presence(808045598447632384)
+        RPC = Presence(905158274490441808)
         RPC.connect()
-        Thread(target=Discord_rp.update).start()
+        Thread(target=update_rich_presence).start()
     except Exception as e:
         #print("Error launching Discord RPC thread: " + str(e))
         pass
@@ -573,13 +581,13 @@ def update_rich_presence():
     startTime = int(time())
     while True:
         try:
-            total_hashrate = get_prefix("H/s", sum(hashrate.values()), 2)
+            total_hashrate = get_prefix("H/s", sum(hashrate_list), 2)
             RPC.update(details="Hashrate: " + str(total_hashrate),
                        start=mining_start_time,
-                       state=str(accept.value) + "/"
-                       + str(reject.value + accept.value)
+                       state=str(shares[0]) + "/"
+                       + str(shares[0] + shares[1])
                        + " accepted shares",
-                       large_image="ducol",
+                       large_image="avrminer",
                        large_text="Duino-Coin, "
                        + "a coin that can be mined with almost everything"
                        + ", including AVR boards",
@@ -626,7 +634,7 @@ def share_print(id, type, accept, reject, total_hashrate,
                 computetime, diff, ping):
     """
     Produces nicely formatted CLI output for shares:
-    HH:MM:S |avrN|  Accepted 0/0 (100%)  0.0s  0 kH/s  diff 0 k  ping 0ms
+    HH:MM:S |avrN| ⛏ Accepted 0/0 (100%) ∙ 0.0s ∙ 0 kH/s ⚙ diff 0 k ∙ ping 0ms
     """
     try:
         diff = get_prefix("", int(diff), 0)
@@ -657,10 +665,10 @@ def share_print(id, type, accept, reject, total_hashrate,
               + str(accept) + "/" + str(accept + reject) + Fore.YELLOW
               + " (" + str(round(accept / (accept + reject) * 100)) + "%)"
               + Style.NORMAL + Fore.RESET
-              + "  " + str("%04.1f" % float(computetime)) + "s"
-              + Style.NORMAL + "  " + Fore.BLUE + Style.BRIGHT
+              + " ∙ " + str("%04.1f" % float(computetime)) + "s"
+              + Style.NORMAL + " ∙ " + Fore.BLUE + Style.BRIGHT
               + str(total_hashrate) + Fore.RESET + Style.NORMAL
-              + Settings.COG + f" diff {diff}  " + Fore.CYAN
+              + Settings.COG + f" diff {diff} ∙ " + Fore.CYAN
               + f"ping {(int(ping))}ms")
         printlock.release()
 
@@ -1026,7 +1034,7 @@ if __name__ == '__main__':
         fastest_pool = Client.fetch_pool()
         threadid = 0
         for port in avrport:
-            thrThread(target=mine_avr,
+            Thread(target=mine_avr,
                       args=(port, threadid,
                             fastest_pool)).start()
             threadid += 1
@@ -1036,7 +1044,7 @@ if __name__ == '__main__':
     if discord_presence == "y":
         try:
             init_rich_presence()
-            thrThread(
+            Thread(
                 target=update_rich_presence).start()
         except Exception as e:
             debug_output(f'Error launching Discord RPC thread: {e}')
