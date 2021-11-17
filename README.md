@@ -42,8 +42,6 @@ DuinoCoinI2C_RPI Version 2.73
 
 # Arduino - Slave
 
-All Slaves have the same code and should select the I2C Address automatically.
-
 Occasionally slaves might hang and not responding to master. quick workaround is to press the reset button on the slave to bring it back.
 
 Once in a blue moon, one of the slave might pull down the whole bus with it. power cycling the rig is the fastest way to bring it back.
@@ -61,12 +59,11 @@ Uncomment this line to activate the WDT. works for Nano clone as well. **make su
 * [ArduinoUniqueID](https://github.com/ricaun/ArduinoUniqueID) (Handle the chip ID)
 * [StreamJoin](https://github.com/ricaun/StreamJoin) (StreamString for AVR)
 
-## Automatic I2C Address 
+## I2C Address 
 
-The I2C Address on the Arduino is automatically updated when the board starts, if an Address already exists on the I2C bus the code finds another Address to use.
-However, depending on vendor, some cloned Arduino have a pretty bad random number generator. It causes it to either wait too long or clashes with each other during address assignment.
+The I2C Address on the Arduino is hardcoded by user. if an address already exists on the I2C bus, the behavior is undefined
 
-Change the value on the define for each Nano for non-overlapping delay:
+Change the value on the define for each Nano for unique address:
 ```
 #define DEV_INDEX 1
 ```
