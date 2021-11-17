@@ -12,15 +12,14 @@
 #include <StreamString.h>     // https://github.com/ricaun/StreamJoin
 
 // user to manually change the device number
-// device number is being used to introduced fixed delay for each i2cSlave
-// cloned arduino is pretty bad in generating random number
-// increment this number per upload
-// comment out to use as common code across all arduino. **USE AT YOUR OWN RISK**
+// final I2CS address will be I2CS_START_ADDRESS + DEV_INDEX
+// example: 3 + 0 = 3
 #define DEV_INDEX 0
 
 // change this start address to suit your SBC usable I2C address
 #define I2CS_START_ADDRESS 3
 
+///////////////////////////////////////////////////////////////////////////////////////////
 /* typical i2cdetect printout. showing example of 10 I2CS
 $ i2cdetect -y 1
      0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
@@ -34,7 +33,7 @@ $ i2cdetect -y 1
 70: -- -- -- -- -- -- -- --
 */
 
-byte i2c = I2CS_START_ADDRESS;
+byte i2c = I2CS_START_ADDRESS + DEV_INDEX;
 StreamString bufferReceive;
 StreamString bufferRequest;
 
@@ -45,35 +44,13 @@ void DuinoCoin_setup()
   pinMode(A5, INPUT_PULLUP);
   pinMode(A4, INPUT_PULLUP);
   
-  #ifndef DEV_INDEX
-    unsigned long time = getTrueRotateRandomByte() * 1000 + getTrueRotateRandomByte();
-    delayMicroseconds(time);
-  #else
-    //each i2cSlave should take less than 20ms to scan all addresses
-    delay(20*DEV_INDEX);
-  #endif
-  
-  Wire.begin();
-  // RPI I2C address starts from 0x3 to 0x77
-  for (int address = I2CS_START_ADDRESS; address < 119; address++ )
-  {
-    Wire.beginTransmission(address);
-    int error = Wire.endTransmission();
-    if (error != 0)
-    {
-      i2c = address;
-      break;
-    }
-  }
-  Wire.end();
-
   // Wire begin
   Wire.begin(i2c);
   Wire.onReceive(receiveEvent);
   Wire.onRequest(requestEvent);
 
-  Serial.print(F("Wire Address: "));
-  Serial.println(i2c);
+  SerialPrint(F("Wire Address: "));
+  SerialPrintln(i2c);
 }
 
 
@@ -99,7 +76,7 @@ void requestEvent() {
 
 void abort_loop()
 {
-    Serial.println("Detected invalid char. abort");
+    SerialPrintln("Detected invalid char. abort");
     while (bufferReceive.available()) bufferReceive.read();
     bufferRequest.print("#");
     #ifdef WDT_EN
@@ -110,9 +87,9 @@ void abort_loop()
 bool DuinoCoin_loop()
 {
   if (bufferReceive.available() > 0 && bufferReceive.indexOf('\n') != -1) {
-    
-    Serial.print(F("Job: "));
-    Serial.print(bufferReceive);
+    ledOn();
+    SerialPrint(F("Job: "));
+    SerialPrint(bufferReceive);
     
     String lastblockhash = bufferReceive.readStringUntil(',');
     if (check(lastblockhash))
@@ -158,8 +135,8 @@ bool DuinoCoin_loop()
     result = result + String(str_crc8(result));
     bufferRequest.print(result + "\n");
 
-    Serial.print(F("Done "));
-    Serial.println(result + "\n");
+    SerialPrint(F("Done "));
+    SerialPrintln(result + "\n");
     
     return true;
   }
