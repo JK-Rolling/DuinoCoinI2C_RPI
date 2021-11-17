@@ -15,10 +15,10 @@ int freeRam () {
 void printHash(uint8_t* hash) {
   int i;
   for (i = 0; i < 20; i++) {
-    Serial.print("0123456789abcdef"[hash[i] >> 4]);
-    Serial.print("0123456789abcdef"[hash[i] & 0xf]);
+    SerialPrint("0123456789abcdef"[hash[i] >> 4]);
+    SerialPrint("0123456789abcdef"[hash[i] & 0xf]);
   }
-  Serial.println();
+  SerialPrintln();
 }
 
 boolean runEvery(unsigned long interval)
