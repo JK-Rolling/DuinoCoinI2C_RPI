@@ -12,7 +12,7 @@
 // Old bootloader will stuck in boot loop
 // Only power cycle can make it responsive for 8s - reprogram within this 8s with WDT_EN commented
 
-#define WDT_EN "Optiboot"
+//#define WDT_EN "Optiboot"
 //#define SERIAL_LOGGER Serial
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
