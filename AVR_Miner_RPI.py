@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RPI I2C AVR Miner
+RPI I2C AVR Miner 2.75
 Modified by JK-Rolling
 20210919
 
@@ -95,10 +95,10 @@ def port_num(com):
 
 
 class Settings:
-    VER = '2.74'
+    VER = '2.75'
     SOC_TIMEOUT = 45
     REPORT_TIME = 60
-    AVR_TIMEOUT = 4  # diff 6 * 100 / 196 h/s = 3.06
+    AVR_TIMEOUT = 10  # diff 6 * 100 / 196 h/s = 3.06
     DATA_DIR = "Duino-Coin AVR Miner " + str(VER)
     SEPARATOR = ","
     ENCODING = "utf-8"
@@ -135,7 +135,8 @@ class Client:
                          "warning")
             try:
                 response = requests.get(
-                    "https://server.duinocoin.com/getPool").json()
+                    "https://server.duinocoin.com/getPool",
+                    timeout=5).json()
                 if response["success"] == True:
                     NODE_ADDRESS = response["ip"]
                     NODE_PORT = response["port"]
@@ -163,7 +164,7 @@ class Donate:
                         f"{Settings.DATA_DIR}/Donate.exe").is_file():
                     url = ('https://server.duinocoin.com/'
                            + 'donations/DonateExecutableWindows.exe')
-                    r = requests.get(url)
+                    r = requests.get(url, timeout=10)
                     with open(f"{Settings.DATA_DIR}/Donate.exe",
                               'wb') as f:
                         f.write(r.content)
@@ -179,7 +180,7 @@ class Donate:
                            + 'donations/DonateExecutableLinux')
                 if not Path(
                         f"{Settings.DATA_DIR}/Donate").is_file():
-                    r = requests.get(url)
+                    r = requests.get(url, timeout=10)
                     with open(f"{Settings.DATA_DIR}/Donate",
                               "wb") as f:
                         f.write(r.content)
@@ -238,7 +239,7 @@ if not Path(Settings.DATA_DIR + '/Translations.json').is_file():
            + 'revoxhere/'
            + 'duino-coin/master/Resources/'
            + 'AVR_Miner_langs.json')
-    r = requests.get(url)
+    r = requests.get(url, timeout=5)
     with open(Settings.DATA_DIR + '/Translations.json', 'wb') as f:
         f.write(r.content)
 
@@ -1035,8 +1036,8 @@ if __name__ == '__main__':
         threadid = 0
         for port in avrport:
             Thread(target=mine_avr,
-                      args=(port, threadid,
-                            fastest_pool)).start()
+                   args=(port, threadid,
+                         fastest_pool)).start()
             threadid += 1
     except Exception as e:
         debug_output(f'Error launching AVR thread(s): {e}')
