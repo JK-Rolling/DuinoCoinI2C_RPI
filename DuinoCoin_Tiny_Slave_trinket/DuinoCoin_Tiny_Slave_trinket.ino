@@ -296,8 +296,10 @@ uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
     {
       return ducos1res;
     }
+    #ifdef WDT_EN
     if (runEvery(2000))
       wdt_reset();
+    #endif
   }
   return 0;
 }
