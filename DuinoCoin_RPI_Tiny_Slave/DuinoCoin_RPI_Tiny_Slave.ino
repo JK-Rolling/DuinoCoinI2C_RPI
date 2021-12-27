@@ -4,20 +4,29 @@
   by Luiz H. Cassettari
 
   modified by JK Rolling
+  v2.7.5-2
+  * added HASHRATE_FORCE
+  v2.7.5-1
   * added CRC8 checks
   * added WDT to auto reset after 8s of inactivity
 */
+// comment out to disable certain feature
 #define FIND_I2C
 #define WDT_EN
 #define CRC8_EN
+#define HASHRATE_FORCE
 
-/* ignore this if FIND_I2C is enabled
- * comment out FIND_I2C to choose I2C address manually
-*/
-#define ADDRESS_I2C 1
+// user to manually change the device number
+// final I2CS address will be I2CS_START_ADDRESS + DEV_INDEX
+// example: 3 + 0 = 3
+// FIND_I2C will override DEV_INDEX to auto self-assign address
+#define DEV_INDEX 0
+
+// change this start address to suit your SBC usable I2C address
+#define I2CS_START_ADDRESS 3
 
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
-#include <EEPROM.h>
+//#include <EEPROM.h>
 #include <Wire.h>
 #include "sha1.h"
 #ifdef WDT_EN
@@ -28,12 +37,13 @@
 #define SERIAL_LOGGER Serial
 #endif
 #define LED LED_BUILTIN
+#define HASHRATE_SPEED 195
 
 // ATtiny85 - http://drazzy.com/package_drazzy.com_index.json
 // SCL - PB2 - 2
 // SDA - PB0 - 0
 
-#define EEPROM_ADDRESS 0
+//#define EEPROM_ADDRESS 0
 
 #ifdef SERIAL_LOGGER
 #define SerialBegin()              SERIAL_LOGGER.begin(115200);
@@ -168,7 +178,15 @@ void do_job()
   unsigned long startTime = millis();
   int job = work();
   unsigned long endTime = millis();
+  
+  #ifdef HASHRATE_FORCE
+  unsigned long elapsedTime;
+  elapsedTime = (unsigned long)job * 1000UL;
+  elapsedTime = elapsedTime / (HASHRATE_SPEED + random(-5,5));
+  #else
   unsigned int elapsedTime = endTime - startTime;
+  #endif
+  
   memset(buffer, 0, sizeof(buffer));
   char cstr[16];
   
@@ -273,6 +291,8 @@ uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
     {
       return ducos1res;
     }
+    if (runEvery(2000))
+      wdt_reset();
   }
   return 0;
 }
@@ -282,7 +302,7 @@ uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
 // --------------------------------------------------------------------- //
 
 void initialize_i2c(void) {
-  address = ADDRESS_I2C;
+  address = DEV_INDEX + I2CS_START_ADDRESS;
 
   #ifdef FIND_I2C
     address = find_i2c();
@@ -337,14 +357,14 @@ void onRequestResult() {
 
 #ifdef FIND_I2C
 
-#define WIRE_MAX 32
+#define WIRE_MAX 127
 byte find_i2c()
 {
   unsigned long time = (unsigned long) getTrueRotateRandomByte() * 1000 + (unsigned long) getTrueRotateRandomByte();
   delayMicroseconds(time);
   Wire.begin();
   int address;
-  for (address = 1; address < WIRE_MAX; address++ )
+  for (address = I2CS_START_ADDRESS; address < WIRE_MAX; address++ )
   {
     Wire.beginTransmission(address);
     int error = Wire.endTransmission();
