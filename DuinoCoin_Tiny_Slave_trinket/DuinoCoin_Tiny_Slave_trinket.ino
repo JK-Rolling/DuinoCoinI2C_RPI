@@ -14,7 +14,7 @@
 */
 // enabling FIND_I2C might not fit into Trinket, unless bootloader is removed to regain full 8KB and load via hw programmer
 //#define FIND_I2C
-#define WDT_EN
+//#define WDT_EN
 #define CRC8_EN
 #define HASHRATE_FORCE
 
