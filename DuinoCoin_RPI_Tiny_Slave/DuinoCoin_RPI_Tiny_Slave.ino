@@ -12,7 +12,7 @@
 */
 // comment out to disable certain feature
 #define FIND_I2C
-#define WDT_EN
+//#define WDT_EN
 #define CRC8_EN
 #define HASHRATE_FORCE
 
