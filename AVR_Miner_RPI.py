@@ -282,6 +282,8 @@ try:
             lang = 'azerbaijani'
         elif locale.startswith('nl'):
             lang = 'dutch'
+        elif locale.startswith('ko'):
+            lang = 'korean'
         else:
             lang = 'english'
     else:
@@ -350,8 +352,12 @@ def title(title: str):
         this escape sequence to change
         the console window title
         """
-        print('\33]0;' + title + '\a', end='')
-        sys.stdout.flush()
+        try:
+            print('\33]0;' + title + '\a', end='')
+            sys.stdout.flush()
+        except Exception:
+            # wasn't able to set title (e.g., running headless)
+            pretty_print(Exception)
 
 
 def handler(signal_received, frame):
@@ -978,7 +984,7 @@ def periodic_report(start_time, end_time, shares,
                  + str(shares) + get_string('report_body2')
                  + str(round(shares/seconds, 1))
                  + get_string('report_body3')
-                 + "\n\t\t‖ Block found: " + str(block)
+                 + get_string('report_body7') + str(block)
                  + get_string('report_body4')
                  + str(int(hashrate)) + " H/s" + get_string('report_body5')
                  + str(int(hashrate*seconds)) + get_string('report_body6')
