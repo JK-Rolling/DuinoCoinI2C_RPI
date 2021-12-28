@@ -80,6 +80,8 @@ For disabled `FIND_I2C`, manually assign I2CS address by modifying `#define DEV_
 
 Use Pico slave code for Raspberry Pi Pico. Logic Level Converter (LLC) is not required as both RPi and Pico operates at 3.3V.
 
+Use Arduino Mbed OS RP2040 Boards **version 2.3.1**. Install it from Arduino IDE board manager
+
 
 ## Library Dependency
 
