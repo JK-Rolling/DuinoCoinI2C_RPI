@@ -76,6 +76,9 @@ each SBC have different starting I2CS address from `i2cdetect` command. Address 
 
 For disabled `FIND_I2C`, manually assign I2CS address by modifying `#define DEV_INDEX 0`
 
+# Raspberry Pi Pico - Slave
+
+Use Pico slave code for Raspberry Pi Pico. Logic Level Converter (LLC) is not required as both RPi and Pico operates at 3.3V.
 
 
 ## Library Dependency
@@ -134,6 +137,13 @@ Connect the pins of the Raspberry PI on the Arduino like the table/images below,
 ||GND | <---> | GND |
 |`SDA`| PIN 3 | <---> | PB0 |
 |`SCL`| PIN 5 | <---> | PB2 |
+
+|| RPI || Pico |
+|:-:| :----: | :-----: | :-----: |
+||3.3V | <---> | VSYS |
+||GND | <---> | GND |
+|`SDA`| PIN 3 | <---> | GP6 |
+|`SCL`| PIN 5 | <---> | GP7 |
 
 # License and Terms of service
 
