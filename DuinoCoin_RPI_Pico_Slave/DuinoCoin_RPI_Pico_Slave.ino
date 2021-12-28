@@ -283,7 +283,7 @@ void HEX_TO_BYTE(char * address, char * hex, int len)
 // DUCO-S1A hasher
 uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
 {
-  if (difficulty > 655) return 0;
+  //if (difficulty > 655) return 0;
   HEX_TO_BYTE(newblockhash, newblockhash, HASH_BUFFER_SIZE);
   for (int ducos1res = 0; ducos1res < difficulty * 100 + 1; ducos1res++)
   {
