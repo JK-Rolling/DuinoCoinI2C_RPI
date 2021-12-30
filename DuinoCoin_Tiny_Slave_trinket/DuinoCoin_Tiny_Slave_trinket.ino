@@ -223,7 +223,7 @@ void do_job()
   buffer[strlen(buffer)] = CHAR_DOT;
 
   // CRC8
-  itoa(crc8(buffer, strlen(buffer)), gen_crc8, 10);
+  itoa(crc8((uint8_t *)buffer, strlen(buffer)), gen_crc8, 10);
   strcpy(buffer + strlen(buffer), gen_crc8);
 #endif
 
@@ -259,7 +259,7 @@ int work()
   strcat(buffer_temp, diff);
   strcat(buffer_temp, delimiters);
   
-  if (atoi(received_crc8) != crc8(buffer_temp,job_length)) {
+  if (atoi(received_crc8) != crc8((uint8_t *)buffer_temp,job_length)) {
     // data corrupted
     SerialPrintln("CRC8 mismatched. Abort..");
     return 0;
