@@ -816,7 +816,11 @@ def mine_avr(com, threadid, fastest_pool):
                                     
                     with thread_lock():
                         for i in range(0, len(i2c_data)):
-                            i2c_bus.write_byte(int(com, base=16),ord(i2c_data[i]))
+                            try:
+                                i2c_bus.write_byte(int(com, base=16),ord(i2c_data[i]))
+                            except Exception as e:
+                                debug_output(com + f': {e}')
+                                pass
                     debug_output(com + ': Reading result from the board')
                     i2c_responses = ''
                     result = []
