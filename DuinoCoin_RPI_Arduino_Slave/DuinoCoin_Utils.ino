@@ -126,5 +126,5 @@ uint8_t str_crc8( String msg )
     int msg_len = msg.length() + 1;
     char char_array[msg_len];
     msg.toCharArray(char_array, msg_len);
-    return crc8(char_array,msg.length());
+    return crc8((uint8_t *)char_array,msg.length());
 }
