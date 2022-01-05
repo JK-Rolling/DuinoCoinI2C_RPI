@@ -99,6 +99,7 @@ class Settings:
     SOC_TIMEOUT = 45
     REPORT_TIME = 60
     AVR_TIMEOUT = 10  # diff 6 * 100 / 196 h/s = 3.06
+    DELAY_START = 120 # 120 seconds start delay between worker to help kolka sync efficiency drop
     DATA_DIR = "Duino-Coin AVR Miner " + str(VER)
     SEPARATOR = ","
     ENCODING = "utf-8"
@@ -469,6 +470,7 @@ def load_config():
             'debug':            'n',
             "soc_timeout":      45,
             "avr_timeout":      10,
+            "delay_start":      Settings.DELAY_START,
             "discord_presence": "y",
             "periodic_report":  60,
             "shuffle_ports":    "y",
@@ -492,6 +494,7 @@ def load_config():
         rig_identifier = config["AVR Miner"]['identifier']
         Settings.SOC_TIMEOUT = int(config["AVR Miner"]["soc_timeout"])
         Settings.AVR_TIMEOUT = float(config["AVR Miner"]["avr_timeout"])
+        Settings.DELAY_START = int(config["AVR Miner"]["delay_start"])
         discord_presence = config["AVR Miner"]["discord_presence"]
         shuffle_ports = config["AVR Miner"]["shuffle_ports"]
         Settings.REPORT_TIME = int(config["AVR Miner"]["periodic_report"])
@@ -1049,6 +1052,12 @@ if __name__ == '__main__':
                    args=(port, threadid,
                          fastest_pool)).start()
             threadid += 1
+            pretty_print('sys' + str(threadid),
+                            f" Started {threadid}/{len(avrport)} worker(s). Next I2C AVR Miner starts in "
+                            + str(Settings.DELAY_START)
+                            + "s",
+                            "success")
+            sleep(Settings.DELAY_START)
     except Exception as e:
         debug_output(f'Error launching AVR thread(s): {e}')
 
