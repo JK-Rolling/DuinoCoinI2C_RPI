@@ -4,12 +4,18 @@
   by Luiz H. Cassettari
 
   modified by JK Rolling
+  v2.7.5-3
+  * added -Ofast option
   v2.7.5-2
   * added HASHRATE_FORCE
   v2.7.5-1
   * added CRC8 checks
   * added WDT to auto reset after 8s of inactivity
 */
+/* For microcontrollers with low memory change that to -Os in all files,
+for default settings use -O0. -O may be a good tradeoff between both */
+//#pragma GCC optimize ("-Ofast")
+
 // comment out to disable certain feature
 #define FIND_I2C
 //#define WDT_EN
