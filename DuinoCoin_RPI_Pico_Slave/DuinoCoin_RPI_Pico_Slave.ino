@@ -4,6 +4,9 @@
   by Luiz H. Cassettari
 
   modified by JK Rolling
+  v3.0-1
+  * Added DuinoCoinSpeed.h
+  * placed Sha1Class into stack to save more space
   v2.7.5-3
   * added Raspberry Pi Pico support
   v2.7.5-2
@@ -12,6 +15,7 @@
   * added CRC8 checks
   * added WDT to auto reset after 8s of inactivity
 */
+//////////////////////////// USER MODIFICATION START ////////////////////////////
 // comment out to disable certain feature
 //#define FIND_I2C
 //-N/A- #define WDT_EN
@@ -25,10 +29,10 @@
 #define DEV_INDEX 0
 
 // change this start address to suit your SBC usable I2C address
-#define I2CS_START_ADDRESS 3
+#define I2CS_START_ADDRESS 8
+//////////////////////////// USER MODIFICATION END ////////////////////////////
 
 #include "UniqueID.h"
-//#include <EEPROM.h>
 #include <Wire.h>
 #include "sha1.h"
 #ifdef WDT_EN
@@ -46,7 +50,6 @@
 // I2C1 SCL - GP7
 // I2C1 SDA - GP6
 
-//#define EEPROM_ADDRESS 0
 
 #ifdef SERIAL_LOGGER
 #define SerialBegin()              SERIAL_LOGGER.begin(115200);
@@ -70,7 +73,7 @@
 #define LedBlink()
 #endif
 
-#define BUFFER_MAX 90
+#define BUFFER_MAX 105
 #define HASH_BUFFER_SIZE 20
 #define CHAR_END '\n'
 #define CHAR_DOT ','
@@ -84,7 +87,6 @@ static uint8_t buffer_position;
 static uint8_t buffer_length;
 static bool working;
 static bool jobdone;
-
 
 void(* resetFunc) (void) = 0;//declare reset function at address 0
 
@@ -115,15 +117,6 @@ void setup() {
 void loop() {
   do_work();
   millis(); // ????? For some reason need this to work the i2c
-//#ifdef SERIAL_LOGGER
-//  if (SERIAL_LOGGER.available())
-//  {
-//#ifdef EEPROM_ADDRESS
-//    EEPROM.write(EEPROM_ADDRESS, SERIAL_LOGGER.parseInt());
-//#endif
-//    resetFunc();
-//  }
-//#endif
 }
 
 // --------------------------------------------------------------------- //
@@ -283,12 +276,14 @@ void HEX_TO_BYTE(char * address, char * hex, int len)
 // DUCO-S1A hasher
 uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
 {
+  Sha1Class Sha1_base;
   //if (difficulty > 655) return 0;
   HEX_TO_BYTE(newblockhash, newblockhash, HASH_BUFFER_SIZE);
-  for (unsigned int ducos1res = 0; ducos1res < difficulty * 100 + 1; ducos1res++)
+  Sha1_base.init();
+  Sha1_base.print(lastblockhash);
+  for (int ducos1res = 0; ducos1res < difficulty * 100 + 1; ducos1res++)
   {
-    Sha1.init();
-    Sha1.print(lastblockhash);
+    Sha1 = Sha1_base;
     Sha1.print(ducos1res);
     if (memcmp(Sha1.result(), newblockhash, HASH_BUFFER_SIZE) == 0)
     {
@@ -312,13 +307,6 @@ void initialize_i2c(void) {
   #ifdef FIND_I2C
     address = find_i2c();
   #endif
-//#ifdef EEPROM_ADDRESS
-//  address = EEPROM.read(EEPROM_ADDRESS);
-//  if (address == 0 || address > 127) {
-//    address = ADDRESS_I2C;
-//    EEPROM.write(EEPROM_ADDRESS, address);
-//  }
-//#endif
 
   SerialPrint("Wire begin ");
   SerialPrintln(address);
@@ -364,7 +352,6 @@ void onRequestResult() {
 #ifdef FIND_I2C
 
 #define WIRE_MAX 127
-
 byte find_i2c()
 {
   unsigned long time = (unsigned long) getTrueRotateRandomByte() * 1000 + (unsigned long) getTrueRotateRandomByte();
