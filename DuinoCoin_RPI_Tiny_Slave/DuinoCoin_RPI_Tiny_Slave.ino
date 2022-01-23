@@ -4,6 +4,9 @@
   by Luiz H. Cassettari
 
   modified by JK Rolling
+  v3.0-1
+  * Added DuinoCoinSpeed.h
+  * placed Sha1Class into stack to save more space
   v2.7.5-3
   * added -Ofast option
   v2.7.5-2
@@ -12,44 +15,43 @@
   * added CRC8 checks
   * added WDT to auto reset after 8s of inactivity
 */
-/* For microcontrollers with low memory change that to -Os in all files,
-for default settings use -O0. -O may be a good tradeoff between both */
-//#pragma GCC optimize ("-Ofast")
-
+//////////////////////////// USER MODIFICATION START ////////////////////////////
 // comment out to disable certain feature
-#define FIND_I2C
+//#define FIND_I2C
 //#define WDT_EN
 #define CRC8_EN
-#define HASHRATE_FORCE
+//#define HASHRATE_FORCE
 
 // user to manually change the device number
 // final I2CS address will be I2CS_START_ADDRESS + DEV_INDEX
-// example: 3 + 0 = 3
+// example: 8 + 1 = 9
 // FIND_I2C will override DEV_INDEX to auto self-assign address
 #define DEV_INDEX 0
 
 // change this start address to suit your SBC usable I2C address
-#define I2CS_START_ADDRESS 3
+#define I2CS_START_ADDRESS 8
+
+//////////////////////////// USER MODIFICATION END ////////////////////////////
 
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
-//#include <EEPROM.h>
 #include <Wire.h>
 #include "sha1.h"
 #ifdef WDT_EN
   #include <avr/wdt.h>
 #endif
-
+#define SERIAL_LOGGER Serial
 #if defined(ARDUINO_AVR_UNO) | defined(ARDUINO_AVR_PRO)
 #define SERIAL_LOGGER Serial
 #endif
 #define LED LED_BUILTIN
-#define HASHRATE_SPEED 195
 
 // ATtiny85 - http://drazzy.com/package_drazzy.com_index.json
 // SCL - PB2 - 2
 // SDA - PB0 - 0
 
-//#define EEPROM_ADDRESS 0
+// Nano/UNO
+// SCL - A5
+// SDA - A4
 
 #ifdef SERIAL_LOGGER
 #define SerialBegin()              SERIAL_LOGGER.begin(115200);
@@ -77,6 +79,7 @@ for default settings use -O0. -O may be a good tradeoff between both */
 #define HASH_BUFFER_SIZE 20
 #define CHAR_END '\n'
 #define CHAR_DOT ','
+#define HASHRATE_SPEED 258
 
 static const char DUCOID[] PROGMEM = "DUCOID";
 static const char ZEROS[] PROGMEM = "000";
@@ -87,7 +90,6 @@ static uint8_t buffer_position;
 static uint8_t buffer_length;
 static bool working;
 static bool jobdone;
-
 
 void(* resetFunc) (void) = 0;//declare reset function at address 0
 
@@ -118,15 +120,6 @@ void setup() {
 void loop() {
   do_work();
   millis(); // ????? For some reason need this to work the i2c
-//#ifdef SERIAL_LOGGER
-//  if (SERIAL_LOGGER.available())
-//  {
-//#ifdef EEPROM_ADDRESS
-//    EEPROM.write(EEPROM_ADDRESS, SERIAL_LOGGER.parseInt());
-//#endif
-//    resetFunc();
-//  }
-//#endif
 }
 
 // --------------------------------------------------------------------- //
@@ -192,6 +185,7 @@ void do_job()
   #else
   unsigned int elapsedTime = endTime - startTime;
   #endif
+  if (job<5) elapsedTime = job*(1<<2);
   
   memset(buffer, 0, sizeof(buffer));
   char cstr[16];
@@ -280,18 +274,20 @@ int work()
 
 void HEX_TO_BYTE(char * address, char * hex, int len)
 {
-  for (int i = 0; i < len; i++) address[i] = TWO_HTOI(hex[2 * i], hex[2 * i + 1]);
+  for (uint8_t i = 0; i < len; i++) address[i] = TWO_HTOI(hex[2 * i], hex[2 * i + 1]);
 }
 
 // DUCO-S1A hasher
 uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
 {
+  Sha1Class Sha1_base;
   if (difficulty > 655) return 0;
   HEX_TO_BYTE(newblockhash, newblockhash, HASH_BUFFER_SIZE);
+  Sha1_base.init();
+  Sha1_base.print(lastblockhash);
   for (int ducos1res = 0; ducos1res < difficulty * 100 + 1; ducos1res++)
   {
-    Sha1.init();
-    Sha1.print(lastblockhash);
+    Sha1 = Sha1_base;
     Sha1.print(ducos1res);
     if (memcmp(Sha1.result(), newblockhash, HASH_BUFFER_SIZE) == 0)
     {
@@ -315,13 +311,6 @@ void initialize_i2c(void) {
   #ifdef FIND_I2C
     address = find_i2c();
   #endif
-//#ifdef EEPROM_ADDRESS
-//  address = EEPROM.read(EEPROM_ADDRESS);
-//  if (address == 0 || address > 127) {
-//    address = ADDRESS_I2C;
-//    EEPROM.write(EEPROM_ADDRESS, address);
-//  }
-//#endif
 
   SerialPrint("Wire begin ");
   SerialPrintln(address);
@@ -381,7 +370,6 @@ byte find_i2c()
       break;
     }
   }
-  Wire.begin(address);
   //Wire.end();
   return address;
 }
