@@ -11,6 +11,8 @@
 #ifndef Sha1_h
 #define Sha1_h
 
+#include "DuinoCoinSpeed.h"
+
 #include <inttypes.h>
 #include "Print.h"
 
