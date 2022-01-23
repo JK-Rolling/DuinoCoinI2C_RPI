@@ -39,7 +39,7 @@
 #ifdef WDT_EN
   #include <avr/wdt.h>
 #endif
-#define SERIAL_LOGGER Serial
+
 #if defined(ARDUINO_AVR_UNO) | defined(ARDUINO_AVR_PRO)
 #define SERIAL_LOGGER Serial
 #endif
