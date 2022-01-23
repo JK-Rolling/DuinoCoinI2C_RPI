@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-RPI I2C AVR Miner 2.75
+RPI I2C AVR Miner 3.0 © MIT licensed
 Modified by JK-Rolling
 20210919
 
 Full credit belong to
 https://duinocoin.com
 https://github.com/revoxhere/duino-coin
-Duino-Coin Team & Community 2019-2021
+Duino-Coin Team & Community 2019-2022
 """
 
-from os import _exit, execl, mkdir
+from os import _exit, mkdir
 from os import name as osname
 from os import path
 from os import system as ossystem
@@ -30,15 +30,15 @@ from datetime import datetime
 from statistics import mean
 from signal import SIGINT, signal
 from time import ctime, sleep, strptime, time
-from random import choice
-import select
 import pip
 
 from subprocess import DEVNULL, Popen, check_call, call
 from threading import Thread
 from threading import Lock as thread_lock
 from threading import Semaphore
+import os
 printlock = Semaphore(value=1)
+
 
 def install(package):
     try:
@@ -95,18 +95,25 @@ def port_num(com):
 
 
 class Settings:
-    VER = '2.75'
+    VER = '3.0'
     SOC_TIMEOUT = 45
     REPORT_TIME = 60
-    AVR_TIMEOUT = 10  # diff 6 * 100 / 196 h/s = 3.06
-    DELAY_START = 120 # 120 seconds start delay between worker to help kolka sync efficiency drop
+    AVR_TIMEOUT = 10  # diff 16 * 100 / 269 h/s = 5.94 s
+    DELAY_START = 60  # 60 seconds start delay between worker to help kolka sync efficiency drop
+    CRC8_EN = "y"
     DATA_DIR = "Duino-Coin AVR Miner " + str(VER)
     SEPARATOR = ","
     ENCODING = "utf-8"
-    BLOCK = " ‖ "
+    try:
+        # Raspberry Pi latin users can't display this character
+        BLOCK = " ‖ "
+    except:
+        BLOCK = " | "
     PICK = ""
     COG = " @"
-    if osname != "nt":
+    if (osname != "nt"
+        or bool(osname == "nt"
+                and os.environ.get("WT_SESSION"))):
         # Windows' cmd does not support emojis, shame!
         PICK = " ⛏"
         COG = " ⚙"
@@ -133,16 +140,22 @@ class Client:
     def fetch_pool():
         while True:
             pretty_print("net0", " " + get_string("connection_search"),
-                         "warning")
+                         "info")
             try:
                 response = requests.get(
                     "https://server.duinocoin.com/getPool",
-                    timeout=5).json()
+                    timeout=10).json()
+                    
                 if response["success"] == True:
+                    pretty_print("net0", get_string("connecting_node")
+                                 + response["name"],
+                                 "info")
+                                 
                     NODE_ADDRESS = response["ip"]
                     NODE_PORT = response["port"]
                     debug_output(f"Fetched pool: {response['name']}")
                     return (NODE_ADDRESS, NODE_PORT)
+                    
                 elif "message" in response:
                     pretty_print(f"Warning: {response['message']}"
                                  + ", retrying in 15s", "warning", "net0")
@@ -151,9 +164,14 @@ class Client:
                     raise Exception(
                         "no response - IP ban or connection error")
             except Exception as e:
-                pretty_print("net0",
-                             f"Error fetching mining node: {e}"
-                             + ", retrying in 15s", "error")
+                if "Expecting value" in str(e):
+                    pretty_print("net0", get_string("node_picker_unavailable")
+                                 + f"{retry_count*2}s {Style.RESET_ALL}({e})",
+                                 "warning")
+                else:
+                    pretty_print("net0", get_string("node_picker_error")
+                                 + f"{retry_count*2}s {Style.RESET_ALL}({e})",
+                                 "error")
                 sleep(15)
 
 
@@ -165,7 +183,7 @@ class Donate:
                         f"{Settings.DATA_DIR}/Donate.exe").is_file():
                     url = ('https://server.duinocoin.com/'
                            + 'donations/DonateExecutableWindows.exe')
-                    r = requests.get(url, timeout=10)
+                    r = requests.get(url, timeout=15)
                     with open(f"{Settings.DATA_DIR}/Donate.exe",
                               'wb') as f:
                         f.write(r.content)
@@ -181,7 +199,7 @@ class Donate:
                            + 'donations/DonateExecutableLinux')
                 if not Path(
                         f"{Settings.DATA_DIR}/Donate").is_file():
-                    r = requests.get(url, timeout=10)
+                    r = requests.get(url, timeout=15)
                     with open(f"{Settings.DATA_DIR}/Donate",
                               "wb") as f:
                         f.write(r.content)
@@ -190,12 +208,12 @@ class Donate:
         if osname == 'nt':
             cmd = (f'cd "{Settings.DATA_DIR}" & Donate.exe '
                    + '-o stratum+tcp://xmg.minerclaim.net:3333 '
-                   + f'-u revox.donate -p x -s 4 -e {donation_level*5}')
+                   + f'-u revox.donate -p x -s 4 -e {donation_level*3}')
         elif osname == 'posix':
             cmd = (f'cd "{Settings.DATA_DIR}" && chmod +x Donate '
                    + '&& nice -20 ./Donate -o '
                    + 'stratum+tcp://xmg.minerclaim.net:3333 '
-                   + f'-u revox.donate -p x -s 4 -e {donation_level*5}')
+                   + f'-u revox.donate -p x -s 4 -e {donation_level*3}')
 
         if donation_level <= 0:
             pretty_print(
@@ -212,7 +230,7 @@ class Donate:
             donateExecutable = Popen(cmd, shell=True, stderr=DEVNULL)
             pretty_print('sys0',
                          get_string('thanks_donation').replace("\n", "\n\t\t"),
-                         'warning')
+                         'error')
 
 
 shares = [0, 0, 0]
@@ -303,7 +321,7 @@ def get_string(string_name: str):
     elif string_name in lang_file['english']:
         return lang_file['english'][string_name]
     else:
-        return ' String not found: ' + string_name
+        return string_name
 
 
 def get_prefix(symbol: str,
@@ -356,9 +374,8 @@ def title(title: str):
         try:
             print('\33]0;' + title + '\a', end='')
             sys.stdout.flush()
-        except Exception:
-            # wasn't able to set title (e.g., running headless)
-            pretty_print(Exception)
+        except Exception as e:
+            print(e)
 
 
 def handler(signal_received, frame):
@@ -418,7 +435,7 @@ def load_config():
         while True:
             current_port = input(
                 Style.RESET_ALL + Fore.YELLOW
-                + 'Enter your I2C slave address (e.g. 3): '
+                + 'Enter your I2C slave address (e.g. 8): '
                 + Fore.RESET + Style.BRIGHT)
 
             avrport += current_port
@@ -432,6 +449,13 @@ def load_config():
             else:
                 break
                 
+        Settings.CRC8_EN = input(
+            Style.RESET_ALL + Fore.YELLOW
+            + 'Do you want to turn on CRC8 feature? (Y/n): '
+            + Fore.RESET + Style.BRIGHT)
+        Settings.CRC8_EN = Settings.CRC8_EN.lower()
+        if len(Settings.CRC8_EN) == 0: Settings.CRC8_EN = "y"
+        elif Settings.CRC8_EN != "y": Settings.CRC8_EN = "n"
 
         rig_identifier = input(
             Style.RESET_ALL + Fore.YELLOW
@@ -471,6 +495,7 @@ def load_config():
             "soc_timeout":      45,
             "avr_timeout":      10,
             "delay_start":      Settings.DELAY_START,
+            "crc8_en":          Settings.CRC8_EN,
             "discord_presence": "y",
             "periodic_report":  60,
             "shuffle_ports":    "y",
@@ -495,6 +520,7 @@ def load_config():
         Settings.SOC_TIMEOUT = int(config["AVR Miner"]["soc_timeout"])
         Settings.AVR_TIMEOUT = float(config["AVR Miner"]["avr_timeout"])
         Settings.DELAY_START = int(config["AVR Miner"]["delay_start"])
+        Settings.CRC8_EN = config["AVR Miner"]["crc8_en"]
         discord_presence = config["AVR Miner"]["discord_presence"]
         shuffle_ports = config["AVR Miner"]["shuffle_ports"]
         Settings.REPORT_TIME = int(config["AVR Miner"]["periodic_report"])
@@ -521,10 +547,10 @@ def greeting():
     print(
         Style.DIM + Fore.MAGENTA
         + Settings.BLOCK + Fore.YELLOW
-        + Style.BRIGHT + '\n  Unofficial Duino-Coin RPI I2C  AVR Miner'
+        + Style.BRIGHT + '\n  Unofficial Duino-Coin RPI I2C AVR Miner'
         + Style.RESET_ALL + Fore.MAGENTA
         + f' {Settings.VER}' + Fore.RESET
-        + ' 2021')
+        + ' 2021-2022')
 
     print(
         Style.DIM + Fore.MAGENTA
@@ -622,11 +648,13 @@ def pretty_print(sender: str = "sys0",
         bg_color = Back.BLUE
     elif sender.startswith("avr"):
         bg_color = Back.MAGENTA
-    elif sender.startswith("sys"):
+    else:
         bg_color = Back.GREEN
 
     if state == "success":
         fg_color = Fore.GREEN
+    elif state == "info":
+        fg_color = Fore.BLUE
     elif state == "error":
         fg_color = Fore.RED
     else:
@@ -641,7 +669,7 @@ def pretty_print(sender: str = "sys0",
 
 
 def share_print(id, type, accept, reject, total_hashrate,
-                computetime, diff, ping):
+                computetime, diff, ping, reject_cause=None):
     """
     Produces nicely formatted CLI output for shares:
     HH:MM:S |avrN| ⛏ Accepted 0/0 (100%) ∙ 0.0s ∙ 0 kH/s ⚙ diff 0 k ∙ ping 0ms
@@ -664,6 +692,8 @@ def share_print(id, type, accept, reject, total_hashrate,
         fg_color = Fore.YELLOW
     else:
         share_str = get_string("rejected")
+        if reject_cause:
+            share_str += f"{Style.NORMAL}({reject_cause}) "
         fg_color = Fore.RED
 
     with thread_lock():
@@ -672,7 +702,7 @@ def share_print(id, type, accept, reject, total_hashrate,
               + Fore.WHITE + Style.BRIGHT + Back.MAGENTA + Fore.RESET
               + " avr" + str(id) + " " + Back.RESET
               + fg_color + Settings.PICK + share_str + Fore.RESET
-              + str(accept) + "/" + str(accept + reject) + Fore.YELLOW
+              + str(accept) + "/" + str(accept + reject) + Fore.MAGENTA
               + " (" + str(round(accept / (accept + reject) * 100)) + "%)"
               + Style.NORMAL + Fore.RESET
               + " ∙ " + str("%04.1f" % float(computetime)) + "s"
@@ -814,13 +844,18 @@ def mine_avr(com, threadid, fastest_pool):
                                     + job[2]
                                     + Settings.SEPARATOR)
                                     
-                    i2c_data = str(i2c_data + str(crc8(i2c_data.encode())) + '\n')
-                    debug_output(com + f': Job+crc8: {i2c_data}')
+                    if Settings.CRC8_EN == "y":
+                        i2c_data = str(i2c_data + str(crc8(i2c_data.encode())) + '\n')
+                        debug_output(com + f': Job+crc8: {i2c_data}')
+                    else:
+                        i2c_data = str(i2c_data + '\n')
+                        debug_output(com + f': Job: {i2c_data}')
                                     
                     with thread_lock():
                         for i in range(0, len(i2c_data)):
                             try:
                                 i2c_bus.write_byte(int(com, base=16),ord(i2c_data[i]))
+                                sleep(0.0002)
                             except Exception as e:
                                 debug_output(com + f': {e}')
                                 pass
@@ -841,6 +876,7 @@ def mine_avr(com, threadid, fastest_pool):
                             i2c_responses += i2c_rdata.strip()
                         elif ('#' in i2c_rdata):
                             flush_i2c(i2c_bus,com)
+                            debug_output(com + f': Received response: {i2c_responses}')
                             debug_output(com + f': Retry Job: {job}')
                             raise Exception("I2C data corrupted")
                         elif sleep_en:
@@ -848,7 +884,11 @@ def mine_avr(com, threadid, fastest_pool):
                             sleep(0.05)
                             
                         result = i2c_responses.split(',')
-                        if ((len(result)==4) and ('\n' in i2c_rdata)):
+                        if ((len(result)==4) and ('\n' in i2c_rdata) and (Settings.CRC8_EN == "y")):
+                            debug_output(com + " i2c_responses:" + f'{i2c_responses}')
+                            break
+                        
+                        elif ((len(result)==3) and ('\n' in i2c_rdata) and (Settings.CRC8_EN == "n")):
                             debug_output(com + " i2c_responses:" + f'{i2c_responses}')
                             break
                             
@@ -867,12 +907,13 @@ def mine_avr(com, threadid, fastest_pool):
                         if not result[2].isalnum():
                             debug_output(com + ' Corrupted DUCOID')
                             raise Exception("Corrupted DUCOID")
-                        _resp = i2c_responses.rpartition(Settings.SEPARATOR)[0]+Settings.SEPARATOR
-                        result_crc8 = crc8(_resp.encode())
-                        if int(result[3]) != result_crc8:
-                            bad_crc8 += 1
-                            debug_output(com + f': crc8:: expect:{result_crc8} measured:{result[3]}')
-                            raise Exception("crc8 checksum failed")
+                        if Settings.CRC8_EN == "y":
+                            _resp = i2c_responses.rpartition(Settings.SEPARATOR)[0]+Settings.SEPARATOR
+                            result_crc8 = crc8(_resp.encode())
+                            if (int(result[3]) != result_crc8):
+                                bad_crc8 += 1
+                                debug_output(com + f': crc8:: expect:{result_crc8} measured:{result[3]}')
+                                raise Exception("crc8 checksum failed")
                         break
                     else:
                         raise Exception("No data received from AVR")
@@ -890,6 +931,7 @@ def mine_avr(com, threadid, fastest_pool):
 
                 hashrate_mean.append(hashrate_t)
                 hashrate = mean(hashrate_mean[-5:])
+                hashrate_list[threadid] = hashrate
             except Exception as e:
                 pretty_print('sys' + port_num(com),
                              get_string('mining_avr_connection_error')
@@ -916,7 +958,7 @@ def mine_avr(com, threadid, fastest_pool):
                             + str(result[2]))
 
                 responsetimetart = now()
-                feedback = Client.recv(s, 64)
+                feedback = Client.recv(s, 64).split(",")
                 responsetimestop = now()
 
                 time_delta = (responsetimestop -
@@ -924,7 +966,7 @@ def mine_avr(com, threadid, fastest_pool):
                 ping_mean.append(round(time_delta / 1000))
                 ping = mean(ping_mean[-10:])
                 diff = get_prefix("", int(diff), 0)
-                debug_output(com + f': retrieved feedback: {feedback}')
+                debug_output(com + f': retrieved feedback: {" ".join(feedback)}')
             except Exception as e:
                 pretty_print('net' + port_num(com),
                              get_string('connecting_error')
@@ -934,22 +976,28 @@ def mine_avr(com, threadid, fastest_pool):
                 sleep(5)
                 break
 
-            if feedback == 'GOOD':
+            if feedback[0] == 'GOOD':
                 shares[0] += 1
                 share_print(port_num(com), "accept",
                             shares[0], shares[1], hashrate,
                             computetime, diff, ping)
-            elif feedback == 'BLOCK':
+            elif feedback[0] == 'BLOCK':
                 shares[0] += 1
                 shares[2] += 1
                 share_print(port_num(com), "block",
                             shares[0], shares[1], hashrate,
                             computetime, diff, ping)
+            elif feedback[0] == 'BAD':
+                shares[1] += 1
+                reason = feedback[1] if len(feedback) > 1 else None
+                share_print(port_num(com), "reject",
+                            shares[0], shares[1], hashrate_t,
+                            computetime, diff, ping, reason)
             else:
                 shares[1] += 1
                 share_print(port_num(com), "reject",
-                            shares[0], shares[1], hashrate,
-                            computetime, diff, ping)
+                            shares[0], shares[1], hashrate_t,
+                            computetime, diff, ping, feedback)
                 debug_output(com + f': Job: {job}')
                 debug_output(com + f': Result: {result}')
                 flush_i2c(i2c_bus,com,5)
@@ -1052,19 +1100,22 @@ if __name__ == '__main__':
                    args=(port, threadid,
                          fastest_pool)).start()
             threadid += 1
-            pretty_print('sys' + str(threadid),
-                            f" Started {threadid}/{len(avrport)} worker(s). Next I2C AVR Miner starts in "
-                            + str(Settings.DELAY_START)
-                            + "s",
-                            "success")
-            sleep(Settings.DELAY_START)
+            if ((len(avrport) > 1) and (threadid != len(avrport))):
+                pretty_print('sys' + str(threadid),
+                                f" Started {threadid}/{len(avrport)} worker(s). Next I2C AVR Miner starts in "
+                                + str(Settings.DELAY_START)
+                                + "s",
+                                "success")
+                sleep(Settings.DELAY_START)
+            else:
+                pretty_print('sys' + str(threadid),
+                                f" All {threadid}/{len(avrport)} worker(s) started",
+                                "success")
     except Exception as e:
         debug_output(f'Error launching AVR thread(s): {e}')
 
     if discord_presence == "y":
         try:
             init_rich_presence()
-            Thread(
-                target=update_rich_presence).start()
         except Exception as e:
             debug_output(f'Error launching Discord RPC thread: {e}')
