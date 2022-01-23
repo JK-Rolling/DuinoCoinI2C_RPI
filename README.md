@@ -38,7 +38,7 @@ Finally, connect your I2C AVR miner and launch the software (e.g. `python3 ./AVR
 
 ## Version
 
-DuinoCoinI2C_RPI Version 2.75
+DuinoCoinI2C_RPI Version 3.0
 
 # Arduino - Slave
 
@@ -50,7 +50,7 @@ To solve these issues permanently, update Nano with Optiboot bootloader. WDT wil
 
 Uncomment this line to activate the WDT. works for Nano clone as well. **make sure the Nano is using Optiboot**
 
-`#define WDT_EN "Optiboot"`
+`#define WDT_EN`
 
 # ATtiny85 - Slave
 
@@ -68,11 +68,11 @@ Use tiny slave code for ATtiny85 although the same code can also be loaded into 
 |FIND_I2C|Scan available I2CS address and self-assign|
 |WDT_EN|Auto self-reset every 8s in case of inactivity|
 |CRC8_EN|I2C CRC8 insertion and data integrity checks|
-|HASHRATE_FORCE*|Force the hashrate to be 195H/s ±5H/s|
+|HASHRATE_FORCE*|Force the hashrate to be 258H/s ±5H/s|
 
 \* **use at own risk**
 
-each SBC have different starting I2CS address from `i2cdetect` command. Address that is not shown is still usable. To change the I2CS starting address, modify `#define I2CS_START_ADDRESS 3`
+each SBC have different starting I2CS address from `i2cdetect` command. Address that is not shown is still usable. To change the I2CS starting address, modify `#define I2CS_START_ADDRESS 8`
 
 For disabled `FIND_I2C`, manually assign I2CS address by modifying `#define DEV_INDEX 0`
 
@@ -85,9 +85,7 @@ Use Arduino Mbed OS RP2040 Boards **version 2.3.1**. Install it from Arduino IDE
 
 ## Library Dependency
 
-* [DuinoCoin](https://github.com/ricaun/arduino-DuinoCoin) (Handle the `Ducos1a` hash work)
 * [ArduinoUniqueID](https://github.com/ricaun/ArduinoUniqueID) (Handle the chip ID)
-* [StreamJoin](https://github.com/ricaun/StreamJoin) (StreamString for AVR)
 
 ## I2C Address 
 
@@ -104,13 +102,21 @@ The master requests the job on the `DuinoCoin` server and sends the work to the 
 
 After the job is done, the slave sends back the response to the master (SBC) and then sends back to the `DuinoCoin` server.
 
+## CRC8 Feature
+
+During setup, user can choose to turn on/off CRC8 feature. This option applies to all workers.
+
+CRC8 feature is ON by default. To disable it, upload sketch with `//#define CRC8_EN` commented and choose `n` during CRC8 prompt in Python miner setup
+
 ## Max Client/Slave
 
-The code theoretically supports up to 117 clients on Raspberry PI on single I2C bus
+The code theoretically supports up to 111 clients on Raspberry PI (Bullseye OS) on single I2C bus
 
-Slave addresses range from 0x3..0x77
+Slave addresses range from 0x8..0x77
 
-RPi have 2 I2C buses which bring up the count up to 234. This requires 2 separate instances of Python miner with it's own Settings.cfg file. Duplicate the directory into 2 and start the setup from there.
+Some reported that I2C addresses that did not shows up from `i2cdetect` are accessible
+
+RPi have 2 I2C buses which bring up the count up to 254 (theoretical). This requires 2 separate instances of Python miner with it's own Settings.cfg file. Duplicate the directory into 2 and start the setup from there.
 
 ## Enable I2C on Raspberry PI
 
@@ -146,6 +152,14 @@ Connect the pins of the Raspberry PI on the Arduino like the table/images below,
 ||GND | <---> | GND |
 |`SDA`| PIN 3 | <---> | GP6 |
 |`SCL`| PIN 5 | <---> | GP7 |
+
+## Benchmarks of tested devices
+
+  | Device                                                    | Average hashrate<br>(all threads) | Mining<br>threads |
+  |-----------------------------------------------------------|-----------------------------------|-------------------|
+  | Arduino Pro Mini, Uno, Nano etc.<br>(Atmega 328p/pb/16u2) | 268 H/s                           | 1                 |
+  | Adafruit Trinket 5V Attiny85                              | 258 kH/s                          | 1                 |
+  | Raspberry Pi Pico                                         | 16 kH/s | 1                       | 1                 |
 
 # License and Terms of service
 
