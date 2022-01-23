@@ -8,6 +8,7 @@
   Cryptosuite-master sub-directory with the needed sha1.h/cpp files copied
   from there and modified as described above.
 */
+#pragma GCC optimize ("-O2")
 #ifndef Sha1_h
 #define Sha1_h
 
