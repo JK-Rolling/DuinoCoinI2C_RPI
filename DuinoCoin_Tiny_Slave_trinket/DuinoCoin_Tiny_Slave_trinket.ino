@@ -6,17 +6,20 @@
   Modified by JK-Rolling
   12 Sep 2021
   for Adafruit Trinket attiny85
+  V3.0-1
+  * use -O2 optimization
   v2.7.5-2
   * added HASHRATE_FORCE
   v2.7.5-1
   * added CRC8 checks
   * added WDT to auto reset after 8s of inactivity
 */
+#pragma GCC optimize ("-O2")
 // enabling FIND_I2C might not fit into Trinket, unless bootloader is removed to regain full 8KB and load via hw programmer
 //#define FIND_I2C
 //#define WDT_EN
 #define CRC8_EN
-#define HASHRATE_FORCE
+//#define HASHRATE_FORCE
 
 // user to manually change the device number
 // final I2CS address will be I2CS_START_ADDRESS + DEV_INDEX
@@ -25,10 +28,9 @@
 #define DEV_INDEX 0
 
 // change this start address to suit your SBC usable I2C address
-#define I2CS_START_ADDRESS 3
+#define I2CS_START_ADDRESS 8
 
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
-//#include <EEPROM.h>
 #include <TinyWireM.h>
 #include "TinyWireS.h"
 #include "sha1.h"
@@ -40,14 +42,12 @@
 #define SERIAL_LOGGER Serial
 #endif
 #define LED LED_BUILTIN
-#define HASHRATE_SPEED 195
+#define HASHRATE_SPEED 258
 
 // ATtiny85 - http://drazzy.com/package_drazzy.com_index.json
 // Adafruit Trinket ATtiny85 https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
 // SCL - PB2 - 2
 // SDA - PB0 - 0
-
-//#define EEPROM_ADDRESS 0
 
 #ifdef SERIAL_LOGGER
 #define SerialBegin()              SERIAL_LOGGER.begin(115200);
@@ -116,15 +116,6 @@ void setup() {
 void loop() {
   do_work();
   millis(); // ????? For some reason need this to work the i2c
-//#ifdef SERIAL_LOGGER
-//  if (SERIAL_LOGGER.available())
-//  {
-//#ifdef EEPROM_ADDRESS
-//    EEPROM.write(EEPROM_ADDRESS, SERIAL_LOGGER.parseInt());
-//#endif
-//    resetFunc();
-//  }
-//#endif
   TinyWireS_stop_check();
 }
 
@@ -191,6 +182,7 @@ void do_job()
   #else
   unsigned int elapsedTime = endTime - startTime;
   #endif
+  if (job<5) elapsedTime = job*(1<<2);
   
   memset(buffer, 0, sizeof(buffer));
   char cstr[16];
@@ -315,14 +307,6 @@ void initialize_i2c(void) {
   address = find_i2c();
 #endif
 
-//#ifdef EEPROM_ADDRESS
-//  address = EEPROM.read(EEPROM_ADDRESS);
-//  if (address == 0 || address > 127) {
-//    address = ADDRESS_I2C;
-//    EEPROM.write(EEPROM_ADDRESS, address);
-//  }
-//#endif
-
   SerialPrint("Wire begin ");
   SerialPrintln(address);
   TinyWireS.begin(address);
@@ -330,7 +314,7 @@ void initialize_i2c(void) {
   TinyWireS.onRequest(onRequestResult);
 }
 
-void onReceiveJob(int howMany) {    
+void onReceiveJob(uint8_t howMany) {    
   if (howMany == 0) return;
   if (working) return;
   if (jobdone) return;
@@ -380,7 +364,6 @@ byte find_i2c()
       break;
     }
   }
-  TinyWireS.begin(address);
   //Wire.end();
   return address;
 }
