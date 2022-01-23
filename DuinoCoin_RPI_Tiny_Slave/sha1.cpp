@@ -8,7 +8,6 @@
   Cryptosuite-master sub-directory with the needed sha1.h/cpp files copied
   from there and modified as described above.
 */
-//#pragma GCC optimize ("-Ofast")
 #include <string.h>
 //#include <avr/io.h>
 //#include <avr/pgmspace.h>
@@ -113,7 +112,7 @@ uint8_t* Sha1Class::result(void) {
   pad();
   
   // Swap byte order back
-  for (int i=0; i<5; i++) {
+  for (uint8_t i=0; i<5; i++) {
     uint32_t a,b;
     a=state.w[i];
     b=a<<24;
