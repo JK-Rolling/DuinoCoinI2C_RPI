@@ -42,6 +42,8 @@ DuinoCoinI2C_RPI Version 3.0
 
 # Arduino - Slave
 
+Arduino shall use `DuinoCoin_RPI_Tiny_Slave` sketch.
+
 Occasionally slaves might hang and not responding to master. quick workaround is to press the reset button on the slave to bring it back.
 
 Once in a blue moon, one of the slave might pull down the whole bus with it. power cycling the rig is the fastest way to bring it back.
