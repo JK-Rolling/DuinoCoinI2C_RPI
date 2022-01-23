@@ -8,9 +8,10 @@
   Cryptosuite-master sub-directory with the needed sha1.h/cpp files copied
   from there and modified as described above.
 */
-//#pragma GCC optimize ("-Ofast")
 #ifndef Sha1_h
 #define Sha1_h
+
+#include "DuinoCoinSpeed.h"
 
 #include <inttypes.h>
 #include "Print.h"
