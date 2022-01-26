@@ -54,10 +54,6 @@ Uncomment this line to activate the WDT. works for Nano clone as well. **make su
 
 `#define WDT_EN`
 
-# ATtiny85 - Slave
-
-Use tiny slave code for ATtiny85 although the same code can also be loaded into Arduino. Arduino 168p or equivalent have less program storage space/RAM should use tiny slave to work properly.
-
 4 main feature can be turn on/off individually to cater for your specific scenario. comment out to disable.
 ```C
 #define FIND_I2C
@@ -77,6 +73,13 @@ Use tiny slave code for ATtiny85 although the same code can also be loaded into 
 each SBC have different starting I2CS address from `i2cdetect` command. Address that is not shown is still usable. To change the I2CS starting address, modify `#define I2CS_START_ADDRESS 8`
 
 For disabled `FIND_I2C`, manually assign I2CS address by modifying `#define DEV_INDEX 0`
+
+# ATtiny85 - Slave
+
+Use `DuinoCoin_ATTiny_Slave` for ATtiny85. CRC8 feature should be disabled from Python miner
+
+Will look into adding more feature in near future
+
 
 # Raspberry Pi Pico - Slave
 
