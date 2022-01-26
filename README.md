@@ -163,8 +163,8 @@ Connect the pins of the Raspberry PI on the Arduino like the table/images below,
   | Device                                                    | Average hashrate<br>(all threads) | Mining<br>threads |
   |-----------------------------------------------------------|-----------------------------------|-------------------|
   | Arduino Pro Mini, Uno, Nano etc.<br>(Atmega 328p/pb/16u2) | 268 H/s                           | 1                 |
-  | Adafruit Trinket 5V Attiny85                              | 258 kH/s                          | 1                 |
-  | Raspberry Pi Pico                                         | 16 kH/s | 1                       | 1                 |
+  | Adafruit Trinket 5V Attiny85                              | 258 H/s                           | 1                 |
+  | Raspberry Pi Pico                                         | 16 kH/s                           | 1                 |
 
 # License and Terms of service
 
