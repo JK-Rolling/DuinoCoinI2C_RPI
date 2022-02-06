@@ -87,6 +87,38 @@ Use Pico slave code for Raspberry Pi Pico. Logic Level Converter (LLC) is not re
 
 Use Arduino Mbed OS RP2040 Boards **version 2.3.1**. Install it from Arduino IDE board manager
 
+Raspberry Pi Pico default I2C pin uses `SDA - GP6` `SCL - GP7`. However, user can change the I2C pin by modifying `pins_arduino.h` file installed in mbed_rp2040.
+
+The motivation to change the default I2C pin is to make the board rig building friendly because now the I2C pin have the same side as the `Vsys` pin
+
+Depending on how the Arduino IDE was configured, usually the file is located in `.../packages/arduino/hardware/mbed_rp2040/2.3.1/variants/RASPBERRY_PI_PICO/pins_arduino.h`
+
+* On GNU/Linux: ~/.arduino15/packages/
+* On Windows: %AppData%\Arduino15\packages\
+* On macOS: ~/Library/Arduino15/packages/
+
+**Example**
+
+**From**
+```C
+// DEFAULT
+// SDA - PIN9/GP6
+// SCL - PIN10/GP7
+#define PIN_WIRE_SDA        (6u)
+#define PIN_WIRE_SCL        (7u)
+```
+
+**To**
+```C
+// USER MODIFIED
+// SDA - PIN31/GP26
+// SCL - PIN32/GP27
+#define PIN_WIRE_SDA        (26u)
+#define PIN_WIRE_SCL        (27u)
+```
+
+<img src="Resources/raspberry-pi-pico-pinout.jpg" alt="pico" width="100%">
+
 
 ## Library Dependency
 
