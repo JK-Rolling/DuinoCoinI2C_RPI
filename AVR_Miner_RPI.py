@@ -138,7 +138,6 @@ class Client:
         return data
 
     def fetch_pool():
-        retry_count = 7
         while True:
             pretty_print("net0", " " + get_string("connection_search"),
                          "info")
@@ -167,17 +166,13 @@ class Client:
             except Exception as e:
                 if "Expecting value" in str(e):
                     pretty_print("net0", get_string("node_picker_unavailable")
-                                 + f"{retry_count*2}s {Style.RESET_ALL}({e})",
+                                 + f"15s {Style.RESET_ALL}({e})",
                                  "warning")
                 else:
                     pretty_print("net0", get_string("node_picker_error")
-                                 + f"{retry_count*2}s {Style.RESET_ALL}({e})",
+                                 + f"15s {Style.RESET_ALL}({e})",
                                  "error")
-                
-                sleep(retry_count*2)
-                if retry_count < 16:
-                    retry_count += 1
-                
+                sleep(15)
 
 
 class Donate:
