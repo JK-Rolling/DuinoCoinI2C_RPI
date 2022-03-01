@@ -115,8 +115,14 @@ class Settings:
         or bool(osname == "nt"
                 and os.environ.get("WT_SESSION"))):
         # Windows' cmd does not support emojis, shame!
-        PICK = " ⛏"
-        COG = " ⚙"
+        # And some codecs same, for example the Latin-1 encoding don`t support emoji
+        try:
+            "⛏ ⚙".encode(sys.stdout.encoding) # if the terminal support emoji
+            PICK = " ⛏"
+            COG = " ⚙"
+        except UnicodeEncodeError: # else
+            PICK = ""
+            COG = " @"
 
 
 class Client:
@@ -303,6 +309,10 @@ try:
             lang = 'dutch'
         elif locale.startswith('ko'):
             lang = 'korean'
+        elif locale.startswith("id"):
+            lang = "indonesian"
+        elif locale.startswith("cz"):
+            lang = "czech"
         else:
             lang = 'english'
     else:
@@ -1050,16 +1060,16 @@ def periodic_report(start_time, end_time, shares,
 
 def calculate_uptime(start_time):
     uptime = time() - start_time
-    if uptime <= 59:
+    if uptime >= 7200: # 2 hours, plural
+        return str(uptime // 3600) + get_string('uptime_hours')
+    elif uptime >= 3600: # 1 hour, not plural
+        return str(uptime // 3600) + get_string('uptime_hour')
+    elif uptime >= 120: # 2 minutes, plural
+        return str(uptime // 60) + get_string('uptime_minutes')
+    elif uptime >= 60: # 1 minute, not plural
+        return str(uptime // 60) + get_string('uptime_minute')
+    else: # less than 1 minute
         return str(round(uptime)) + get_string('uptime_seconds')
-    elif uptime == 60:
-        return str(round(uptime // 60)) + get_string('uptime_minute')
-    elif uptime >= 60:
-        return str(round(uptime // 60)) + get_string('uptime_minutes')
-    elif uptime == 3600:
-        return str(round(uptime // 3600)) + get_string('uptime_hour')
-    elif uptime >= 3600:
-        return str(round(uptime // 3600)) + get_string('uptime_hours')
 
 
 if __name__ == '__main__':
