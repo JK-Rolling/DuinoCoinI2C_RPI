@@ -906,7 +906,7 @@ def mine_avr(com, threadid, fastest_pool):
             try:
             
                 if config["AVR Miner"]["mining_key"] != "None":
-                    key = b64.b64decode(config["AVR Miner"]["mining_key"]).decode()
+                    key = b64.b64decode(config["AVR Miner"]["mining_key"]).decode('utf-8')
                 else:
                     key = config["AVR Miner"]["mining_key"]
                     
