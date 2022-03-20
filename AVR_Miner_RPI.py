@@ -653,6 +653,7 @@ def greeting():
     print(
         Style.DIM + Fore.MAGENTA
         + Settings.BLOCK + Style.NORMAL + Fore.MAGENTA
+        + 'https://github.com/JK-Rolling  '
         + 'https://github.com/revoxhere/duino-coin')
 
     if lang != "english":
