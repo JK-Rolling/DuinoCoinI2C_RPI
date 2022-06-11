@@ -199,10 +199,12 @@ Connect the pins of the Raspberry PI on the Arduino like the table/images below,
 
 || RPI || Pico |
 |:-:| :----: | :-----: | :-----: |
-||3.3V | <---> | VSYS |
+||3.3V or 5V | <---> | VSYS* |
 ||GND | <---> | GND |
 |`SDA`| PIN 3 | <---> | GP6 |
 |`SCL`| PIN 5 | <---> | GP7 |
+
+\* VSYS accept voltage range from 1.8V to 5.5V. Voltage regulator onboard will generate 3.3V for rp2040 use
 
 ## Benchmarks of tested devices
 
