@@ -26,7 +26,7 @@
 #define DEV_INDEX                   0
 #define I2CS_START_ADDRESS          8
 #define I2CS_FIND_ADDR              false
-#define WDT_EN                      true
+#define WDT_EN                      false
 #define CRC8_EN                     true
 #define LED_EN                      true
 /****************** USER MODIFICATION END ******************/
