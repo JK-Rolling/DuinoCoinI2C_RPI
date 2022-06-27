@@ -177,7 +177,9 @@ Connect the pins of the Raspberry PI on the Arduino like the table/images below,
 |`SDA`| PIN 3 | <---> | PB0 |
 |`SCL`| PIN 5 | <---> | PB2 |
 
-For dual I2C master and dual I2C slave interface
+## For dual I2C master and dual I2C slave interface
+
+<img src="Resources/pico_twoI2CM_twoI2CS_bb.png" alt="pico" width="100%">
 
 || RPI (dual I2C) || Pico |
 |:-:| :----: | :-----: | :-----: |
@@ -188,7 +190,9 @@ For dual I2C master and dual I2C slave interface
 |`SDA0`| PIN 27 | <---> | GP20 |
 |`SCL0`| PIN 28 | <---> | GP21 |
 
-For single I2C master and dual I2C slave interface
+## For single I2C master and dual I2C slave interface
+
+<img src="Resources/pico_oneI2CM_twoI2CS_bb.png" alt="pico" width="100%">
 
 || RPI (single I2C) || Pico |
 |:-:| :----: | :-----: | :-----: |
@@ -205,7 +209,9 @@ For single I2C master and dual I2C slave interface
   |-----------------------------------------------------------|-----------------------------------|-------------------|
   | Arduino Pro Mini, Uno, Nano etc.<br>(Atmega 328p/pb/16u2) | 268 H/s                           | 1                 |
   | Adafruit Trinket 5V Attiny85                              | 258 H/s                           | 1                 |
-  | Raspberry Pi Pico                                         | 4.7 kH/s                          | 2                 |
+  | Raspberry Pi Pico                                         | 4.7 kH/s*                         | 2                 |
+  
+  \* at 100MHz
 
 # License and Terms of service
 
