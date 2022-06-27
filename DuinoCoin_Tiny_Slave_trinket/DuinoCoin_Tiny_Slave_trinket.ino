@@ -2,10 +2,13 @@
   DoinoCoin_Tiny_Slave_trinket.ino
   created 07 08 2021
   by Luiz H. Cassettari
-
   Modified by JK-Rolling
+  
   12 Sep 2021
   for Adafruit Trinket attiny85
+  v3.18-1
+  * Added worker info report support
+  * support i2c data redundancy
   V3.0-1
   * use -O2 optimization
   v2.7.5-2
@@ -15,36 +18,34 @@
   * added WDT to auto reset after 8s of inactivity
 */
 #pragma GCC optimize ("-O2")
-// enabling FIND_I2C might not fit into Trinket, unless bootloader is removed to regain full 8KB and load via hw programmer
-//#define FIND_I2C
-//#define WDT_EN
-#define CRC8_EN
-//#define HASHRATE_FORCE
-
-// user to manually change the device number
-// final I2CS address will be I2CS_START_ADDRESS + DEV_INDEX
-// example: 3 + 0 = 3
-// FIND_I2C will override DEV_INDEX to auto self-assign address
-#define DEV_INDEX 0
-
-// change this start address to suit your SBC usable I2C address
-#define I2CS_START_ADDRESS 8
-
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
-#include <TinyWireM.h>
 #include "TinyWireS.h"
 #include "sha1.h"
-#ifdef WDT_EN
-  #include <avr/wdt.h>
+
+/****************** USER MODIFICATION START ****************/
+#define WDT_EN                      true
+#define CRC8_EN                     false
+#define DEV_INDEX                   0
+#define I2CS_START_ADDRESS          8
+/****************** USER MODIFICATION END ******************/
+/*---------------------------------------------------------*/
+/****************** FINE TUNING START **********************/
+#define WORKER_NAME                 "trinket"
+#define SENSOR_EN                   false
+#define WIRE_MAX                    32
+#define WIRE_CLOCK                  100000
+#define LED                         LED_BUILTIN
+/****************** FINE TUNING END ************************/
+
+#if WDT_EN
+#include <avr/wdt.h>
 #endif
 
 #if defined(ARDUINO_AVR_UNO) | defined(ARDUINO_AVR_PRO)
 #define SERIAL_LOGGER Serial
 #endif
-#define LED LED_BUILTIN
-#define HASHRATE_SPEED 258
 
-// ATtiny85 - http://drazzy.com/package_drazzy.com_index.json
+
 // Adafruit Trinket ATtiny85 https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
 // SCL - PB2 - 2
 // SDA - PB0 - 0
@@ -78,6 +79,10 @@
 
 static const char DUCOID[] PROGMEM = "DUCOID";
 static const char ZEROS[] PROGMEM = "000";
+static const char WK_NAME[] PROGMEM = WORKER_NAME;
+static const char UNKN[] PROGMEM = "unkn";
+static const char ONE[] PROGMEM = "1";
+static const char ZERO[] PROGMEM = "0";
 
 static byte address;
 static char buffer[BUFFER_MAX];
@@ -94,12 +99,10 @@ void(* resetFunc) (void) = 0;//declare reset function at address 0
 // --------------------------------------------------------------------- //
 
 void setup() {
-  #ifdef WDT_EN
-  wdt_disable();
-  #endif
   SerialBegin();
   initialize_i2c();
-  #ifdef WDT_EN
+  #if WDT_EN
+  wdt_disable();
   wdt_enable(WDTO_8S);
   #endif
   LedBegin();
@@ -151,19 +154,49 @@ void do_work()
       resetFunc();
     }
 
-#ifdef FIND_I2C
-    if (buffer[0] == '@')
-    {
-      address = find_i2c();
-      memset(buffer, 0, sizeof(buffer));
+    if (buffer[0] == 'g') {
+      // i2c_cmd
+      //pos 0123[4]5678
+      //    get,[c]rc8$
+      //    get,[b]aton$
+      //    get,[s]inglecore$
+      //    get,[f]req$
+      char f = buffer[4];
+      switch (tolower(f)) {
+        case 't': // temperature
+          if (SENSOR_EN) strcpy_P(buffer, ONE);
+          else strcpy_P(buffer, ZERO);
+          SerialPrint("SENSOR_EN: ");
+          break;
+        case 'f': // i2c clock frequency
+          char w_clk[10];
+          ltoa(WIRE_CLOCK, w_clk, 10);
+          strcpy(buffer, w_clk);
+          SerialPrint("WIRE_CLOCK: ");
+          break;
+        case 'c': // crc8 status
+          if (CRC8_EN) strcpy_P(buffer, ONE);
+          else strcpy_P(buffer, ZERO);
+          SerialPrint("CRC8_EN: ");
+          break;
+        case 'n': // worker name
+          strcpy_P(buffer, WK_NAME);
+          SerialPrint("WORKER: ");
+          break;
+        default:
+          strcpy_P(buffer, UNKN);
+          SerialPrint("command: ");
+          SerialPrintln(f);
+          SerialPrint("response: ");
+      }
+      SerialPrintln(buffer);
       buffer_position = 0;
-      buffer_length = 0;
+      buffer_length = strlen(buffer);
       working = false;
-      jobdone = false;
+      jobdone = true;
       return;
     }
-#endif
-
+    
     do_job();
   }
   LedLow();
@@ -174,14 +207,7 @@ void do_job()
   unsigned long startTime = millis();
   int job = work();
   unsigned long endTime = millis();
-  
-  #ifdef HASHRATE_FORCE
-  unsigned long elapsedTime;
-  elapsedTime = (unsigned long)job * 1000UL;
-  elapsedTime = elapsedTime / (HASHRATE_SPEED + random(-5,5));
-  #else
   unsigned int elapsedTime = endTime - startTime;
-  #endif
   if (job<5) elapsedTime = job*(1<<2);
   
   memset(buffer, 0, sizeof(buffer));
@@ -210,14 +236,14 @@ void do_job()
     strcpy(buffer + strlen(buffer), cstr);
   }
   
-#ifdef CRC8_EN
+  #if CRC8_EN
   char gen_crc8[3];
   buffer[strlen(buffer)] = CHAR_DOT;
 
   // CRC8
   itoa(crc8((uint8_t *)buffer, strlen(buffer)), gen_crc8, 10);
   strcpy(buffer + strlen(buffer), gen_crc8);
-#endif
+  #endif
 
   SerialPrintln(buffer);
 
@@ -226,7 +252,7 @@ void do_job()
   working = false;
   jobdone = true;
   
-  #ifdef WDT_EN
+  #if WDT_EN
   wdt_reset();
   #endif
 }
@@ -238,7 +264,7 @@ int work()
   char *newHash = strtok(NULL, delimiters);
   char *diff = strtok(NULL, delimiters);
   
-#ifdef CRC8_EN
+  #if CRC8_EN
   char *received_crc8 = strtok(NULL, delimiters);
   // do crc8 checks here
   uint8_t job_length = 3; // 3 commas
@@ -256,7 +282,7 @@ int work()
     SerialPrintln("CRC8 mismatched. Abort..");
     return 0;
   }
-#endif
+  #endif
 
   buffer_length = 0;
   buffer_position = 0;
@@ -288,7 +314,7 @@ uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
     {
       return ducos1res;
     }
-    #ifdef WDT_EN
+    #if WDT_EN
     if (runEvery(2000))
       wdt_reset();
     #endif
@@ -303,10 +329,6 @@ uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
 void initialize_i2c(void) {
   address = DEV_INDEX + I2CS_START_ADDRESS;
 
-#ifdef FIND_I2C
-  address = find_i2c();
-#endif
-
   SerialPrint("Wire begin ");
   SerialPrintln(address);
   TinyWireS.begin(address);
@@ -318,14 +340,15 @@ void onReceiveJob(uint8_t howMany) {
   if (howMany == 0) return;
   if (working) return;
   if (jobdone) return;
+  
+  char c = TinyWireS.read();
+  buffer[buffer_length++] = c;
+  if (buffer_length == BUFFER_MAX) buffer_length--;
+  if (c == CHAR_END || c == '$') {
+    working = true;
+  }
   while (TinyWireS.available()) {
-    char c = TinyWireS.read();
-    buffer[buffer_length++] = c;
-    if (buffer_length == BUFFER_MAX) buffer_length--;
-    if (c == CHAR_END)
-    {
-      working = true;
-    }
+    TinyWireS.read();
   }
 }
 
@@ -337,104 +360,13 @@ void onRequestResult() {
       jobdone = false;
       buffer_position = 0;
       buffer_length = 0;
+      memset(buffer, 0, sizeof(buffer));
     }
   }
   TinyWireS.write(c);
 }
 
-// --------------------------------------------------------------------- //
-// find_i2c
-// --------------------------------------------------------------------- //
-
-#ifdef FIND_I2C
-
-#define WIRE_MAX 127
-byte find_i2c()
-{
-  unsigned long time = (unsigned long) getTrueRotateRandomByte() * 1000 + (unsigned long) getTrueRotateRandomByte();
-  delayMicroseconds(time);
-  TinyWireM.begin();
-  int address;
-  for (address = I2CS_START_ADDRESS; address < WIRE_MAX; address++ )
-  {
-    TinyWireM.beginTransmission(address);
-    int error = TinyWireM.endTransmission();
-    if (error != 0)
-    {
-      break;
-    }
-  }
-  //Wire.end();
-  return address;
-}
-
-// ---------------------------------------------------------------
-// True Random Numbers
-// https://gist.github.com/bloc97/b55f684d17edd8f50df8e918cbc00f94
-// ---------------------------------------------------------------
-
-#if defined(ARDUINO_AVR_PRO)
-#define ANALOG_RANDOM A6
-#else
-#define ANALOG_RANDOM A1
-#endif
-
-const int waitTime = 16;
-
-byte lastByte = 0;
-byte leftStack = 0;
-byte rightStack = 0;
-
-byte rotate(byte b, int r) {
-  return (b << r) | (b >> (8 - r));
-}
-
-void pushLeftStack(byte bitToPush) {
-  leftStack = (leftStack << 1) ^ bitToPush ^ leftStack;
-}
-
-void pushRightStackRight(byte bitToPush) {
-  rightStack = (rightStack >> 1) ^ (bitToPush << 7) ^ rightStack;
-}
-
-byte getTrueRotateRandomByte() {
-  byte finalByte = 0;
-
-  byte lastStack = leftStack ^ rightStack;
-
-  for (int i = 0; i < 4; i++) {
-    delayMicroseconds(waitTime);
-    int leftBits = analogRead(ANALOG_RANDOM);
-
-    delayMicroseconds(waitTime);
-    int rightBits = analogRead(ANALOG_RANDOM);
-
-    finalByte ^= rotate(leftBits, i);
-    finalByte ^= rotate(rightBits, 7 - i);
-
-    for (int j = 0; j < 8; j++) {
-      byte leftBit = (leftBits >> j) & 1;
-      byte rightBit = (rightBits >> j) & 1;
-
-      if (leftBit != rightBit) {
-        if (lastStack % 2 == 0) {
-          pushLeftStack(leftBit);
-        } else {
-          pushRightStackRight(leftBit);
-        }
-      }
-    }
-
-  }
-  lastByte ^= (lastByte >> 3) ^ (lastByte << 5) ^ (lastByte >> 4);
-  lastByte ^= finalByte;
-
-  return lastByte ^ leftStack ^ rightStack;
-}
-
-#endif
-
-#ifdef CRC8_EN
+#if CRC8_EN
 // https://stackoverflow.com/questions/51731313/cross-platform-crc8-function-c-and-python-parity-check
 uint8_t crc8( uint8_t *addr, uint8_t len) {
       uint8_t crc=0;
