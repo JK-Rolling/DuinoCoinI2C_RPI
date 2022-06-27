@@ -2,8 +2,11 @@
   DoinoCoin_Tiny_Slave.ino
   created 07 08 2021
   by Luiz H. Cassettari
-
   modified by JK Rolling
+  
+  v3.18-1
+  * Added worker info report support
+  * support i2c data redundancy
   v3.0-1
   * Added DuinoCoinSpeed.h
   * placed Sha1Class into stack to save more space
@@ -15,35 +18,34 @@
   * added CRC8 checks
   * added WDT to auto reset after 8s of inactivity
 */
-//////////////////////////// USER MODIFICATION START ////////////////////////////
-// comment out to disable certain feature
-//#define FIND_I2C
-//#define WDT_EN
-#define CRC8_EN
-//#define HASHRATE_FORCE
-
-// user to manually change the device number
-// final I2CS address will be I2CS_START_ADDRESS + DEV_INDEX
-// example: 8 + 1 = 9
-// FIND_I2C will override DEV_INDEX to auto self-assign address
-#define DEV_INDEX 0
-
-// change this start address to suit your SBC usable I2C address
-#define I2CS_START_ADDRESS 8
-
-//////////////////////////// USER MODIFICATION END ////////////////////////////
-
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
 #include <Wire.h>
 #include "sha1.h"
-#ifdef WDT_EN
-  #include <avr/wdt.h>
-#endif
 
-#if defined(ARDUINO_AVR_UNO) | defined(ARDUINO_AVR_PRO)
-#define SERIAL_LOGGER Serial
+/****************** USER MODIFICATION START ****************/
+#define DEV_INDEX                   0
+#define I2CS_START_ADDRESS          8
+#define I2CS_FIND_ADDR              false
+#define WDT_EN                      true
+#define CRC8_EN                     true
+#define LED_EN                      true
+/****************** USER MODIFICATION END ******************/
+/*---------------------------------------------------------*/
+/****************** FINE TUNING START **********************/
+#define LED_PIN                     LED_BUILTIN
+#define BLINK_SHARE_FOUND           1
+#define BLINK_SETUP_COMPLETE        2
+#define BLINK_BAD_CRC               3
+#define SERIAL_LOGGER               Serial
+#define I2CS_MAX                    32
+#define SENSOR_EN                   false
+#define WORKER_NAME                 "atmega328p"
+#define WIRE_CLOCK                  100000
+/****************** FINE TUNING END ************************/
+
+#if WDT_EN
+#include <avr/wdt.h>
 #endif
-#define LED LED_BUILTIN
 
 // ATtiny85 - http://drazzy.com/package_drazzy.com_index.json
 // SCL - PB2 - 2
@@ -63,26 +65,17 @@
 #define SerialPrintln(x)
 #endif
 
-#ifdef LED
-#define LedBegin()                pinMode(LED, OUTPUT);
-#define LedHigh()                 digitalWrite(LED, HIGH);
-#define LedLow()                  digitalWrite(LED, LOW);
-#define LedBlink()                LedHigh(); delay(100); LedLow(); delay(100);
-#else
-#define LedBegin()
-#define LedHigh()
-#define LedLow()
-#define LedBlink()
-#endif
-
 #define BUFFER_MAX 90
 #define HASH_BUFFER_SIZE 20
 #define CHAR_END '\n'
 #define CHAR_DOT ','
-#define HASHRATE_SPEED 258
 
 static const char DUCOID[] PROGMEM = "DUCOID";
 static const char ZEROS[] PROGMEM = "000";
+static const char WK_NAME[] PROGMEM = WORKER_NAME;
+static const char UNKN[] PROGMEM = "unkn";
+static const char ONE[] PROGMEM = "1";
+static const char ZERO[] PROGMEM = "0";
 
 static byte address;
 static char buffer[BUFFER_MAX];
@@ -92,24 +85,26 @@ static bool working;
 static bool jobdone;
 
 void(* resetFunc) (void) = 0;//declare reset function at address 0
+void Blink(uint8_t count, uint8_t pin);
 
 // --------------------------------------------------------------------- //
 // setup
 // --------------------------------------------------------------------- //
-
 void setup() {
-  #ifdef WDT_EN
-  wdt_disable();
-  #endif
   SerialBegin();
-  initialize_i2c();
-  #ifdef WDT_EN
-  wdt_enable(WDTO_8S);
+
+  if (LED_EN) {
+    pinMode(LED_PIN, OUTPUT);
+  }
+  
+  #if WDT_EN
+    wdt_disable();
+    wdt_enable(WDTO_8S);
   #endif
-  LedBegin();
-  LedBlink();
-  LedBlink();
-  LedBlink();
+
+  initialize_i2c();
+
+  Blink(BLINK_SETUP_COMPLETE, LED_PIN);
   SerialPrintln("Startup Done!");
 }
 
@@ -119,13 +114,11 @@ void setup() {
 
 void loop() {
   do_work();
-  millis(); // ????? For some reason need this to work the i2c
 }
 
 // --------------------------------------------------------------------- //
 // run
 // --------------------------------------------------------------------- //
-
 boolean runEvery(unsigned long interval)
 {
   static unsigned long previousMillis = 0;
@@ -141,22 +134,69 @@ boolean runEvery(unsigned long interval)
 // --------------------------------------------------------------------- //
 // work
 // --------------------------------------------------------------------- //
-
 void do_work()
 {
   if (working)
   {
-    LedHigh();
+    led_on();
     SerialPrintln(buffer);
 
-    if (buffer[0] == '&')
-    {
+    if (buffer[0] == '&') {
       resetFunc();
     }
 
-#ifdef FIND_I2C
-    if (buffer[0] == '@')
-    {
+    // worker related command
+    if (buffer[0] == 'g') {
+      // i2c_cmd
+      //pos 0123[4]5678
+      //    get,[c]rc8$
+      //    get,[b]aton$
+      //    get,[s]inglecore$
+      //    get,[f]req$
+      char f = buffer[4];
+      switch (tolower(f)) {
+        case 't': // temperature
+          if (SENSOR_EN) strcpy_P(buffer, ONE);
+          else strcpy_P(buffer, ZERO);
+          SerialPrint("SENSOR_EN: ");
+          break;
+        case 'f': // i2c clock frequency
+          char w_clk[10];
+          ltoa(WIRE_CLOCK, w_clk, 10);
+          strcpy(buffer, w_clk);
+          SerialPrint("WIRE_CLOCK: ");
+          break;
+        case 'c': // crc8 status
+          if (CRC8_EN) strcpy_P(buffer, ONE);
+          else strcpy_P(buffer, ZERO);
+          SerialPrint("CRC8_EN: ");
+          break;
+        case 'n': // worker name
+          strcpy_P(buffer, WK_NAME);
+          SerialPrint("WORKER: ");
+          break;
+        default:
+          strcpy_P(buffer, UNKN);
+          SerialPrint("command: ");
+          SerialPrintln(f);
+          SerialPrint("response: ");
+      }
+      SerialPrintln(buffer);
+      buffer_position = 0;
+      buffer_length = strlen(buffer);
+      working = false;
+      jobdone = true;
+      #if WDT_EN
+      wdt_reset();
+      #endif
+      return;
+    }
+    else if (buffer[0] == 's') {
+      // not used at the moment
+    }
+
+    #if I2CS_FIND_ADDR
+    if (buffer[0] == '@') {
       address = find_i2c();
       memset(buffer, 0, sizeof(buffer));
       buffer_position = 0;
@@ -165,11 +205,11 @@ void do_work()
       jobdone = false;
       return;
     }
-#endif
+    #endif
 
     do_job();
   }
-  LedLow();
+  led_off();
 }
 
 void do_job()
@@ -177,14 +217,7 @@ void do_job()
   unsigned long startTime = millis();
   int job = work();
   unsigned long endTime = millis();
-  
-  #ifdef HASHRATE_FORCE
-  unsigned long elapsedTime;
-  elapsedTime = (unsigned long)job * 1000UL;
-  elapsedTime = elapsedTime / (HASHRATE_SPEED + random(-5,5));
-  #else
   unsigned int elapsedTime = endTime - startTime;
-  #endif
   if (job<5) elapsedTime = job*(1<<2);
   
   memset(buffer, 0, sizeof(buffer));
@@ -213,14 +246,14 @@ void do_job()
     strcpy(buffer + strlen(buffer), cstr);
   }
   
-#ifdef CRC8_EN
+  #if CRC8_EN
   char gen_crc8[3];
   buffer[strlen(buffer)] = CHAR_DOT;
 
   // CRC8
   itoa(crc8((uint8_t *)buffer, strlen(buffer)), gen_crc8, 10);
   strcpy(buffer + strlen(buffer), gen_crc8);
-#endif
+  #endif
 
   SerialPrintln(buffer);
 
@@ -229,7 +262,7 @@ void do_job()
   working = false;
   jobdone = true;
   
-  #ifdef WDT_EN
+  #if WDT_EN
   wdt_reset();
   #endif
 }
@@ -241,7 +274,7 @@ int work()
   char *newHash = strtok(NULL, delimiters);
   char *diff = strtok(NULL, delimiters);
 
-#ifdef CRC8_EN
+  #if CRC8_EN
   char *received_crc8 = strtok(NULL, delimiters);
   // do crc8 checks here
   uint8_t job_length = 3; // 3 commas
@@ -259,7 +292,7 @@ int work()
     SerialPrintln("CRC8 mismatched. Abort..");
     return 0;
   }
-#endif
+  #endif
 
   buffer_length = 0;
   buffer_position = 0;
@@ -293,7 +326,7 @@ uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
     {
       return ducos1res;
     }
-    #ifdef WDT_EN
+    #if WDT_EN
     if (runEvery(2000))
       wdt_reset();
     #endif
@@ -307,16 +340,18 @@ uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
 
 void initialize_i2c(void) {
   address = DEV_INDEX + I2CS_START_ADDRESS;
-
-  #ifdef FIND_I2C
-    address = find_i2c();
+  
+  #if I2CS_FIND_ADDR
+  address = find_i2c();
   #endif
 
-  SerialPrint("Wire begin ");
-  SerialPrintln(address);
+  Wire.setClock(WIRE_CLOCK);
   Wire.begin(address);
   Wire.onReceive(onReceiveJob);
   Wire.onRequest(onRequestResult);
+
+  SerialPrint("Wire begin ");
+  SerialPrintln(address);
 }
 
 void onReceiveJob(int howMany) {
@@ -324,13 +359,19 @@ void onReceiveJob(int howMany) {
   if (working) return;
   if (jobdone) return;
 
-  while (Wire.available()) {
-    char c = Wire.read();
-    buffer[buffer_length++] = c;
-    if (buffer_length == BUFFER_MAX) buffer_length--;
-    if (c == CHAR_END)
-    {
-      working = true;
+  for (int i=0; i < howMany; i++) {
+    if (i == 0) {
+      char c = Wire.read();
+      buffer[buffer_length++] = c;
+      if (buffer_length == BUFFER_MAX) buffer_length--;
+      if ((c == CHAR_END) || (c == '$'))
+      {
+        working = true;
+      }
+    }
+    else {
+      // dump the rest
+      Wire.read();
     }
   }
 }
@@ -343,25 +384,25 @@ void onRequestResult() {
       jobdone = false;
       buffer_position = 0;
       buffer_length = 0;
+      memset(buffer, 0, sizeof(buffer));
     }
   }
   Wire.write(c);
 }
 
 // --------------------------------------------------------------------- //
-// find_i2c
+// I2CS_FIND_ADDR
 // --------------------------------------------------------------------- //
-
-#ifdef FIND_I2C
-
-#define WIRE_MAX 127
+#if I2CS_FIND_ADDR
 byte find_i2c()
 {
+  address = I2CS_START_ADDRESS;
   unsigned long time = (unsigned long) getTrueRotateRandomByte() * 1000 + (unsigned long) getTrueRotateRandomByte();
   delayMicroseconds(time);
+  Wire.setClock(WIRE_CLOCK);
   Wire.begin();
   int address;
-  for (address = I2CS_START_ADDRESS; address < WIRE_MAX; address++ )
+  for (address = I2CS_START_ADDRESS; address < I2CS_MAX; address++)
   {
     Wire.beginTransmission(address);
     int error = Wire.endTransmission();
@@ -370,7 +411,7 @@ byte find_i2c()
       break;
     }
   }
-  //Wire.end();
+  Wire.end();
   return address;
 }
 
@@ -378,7 +419,6 @@ byte find_i2c()
 // True Random Numbers
 // https://gist.github.com/bloc97/b55f684d17edd8f50df8e918cbc00f94
 // ---------------------------------------------------------------
-
 #if defined(ARDUINO_AVR_PRO)
 #define ANALOG_RANDOM A6
 #else
@@ -437,10 +477,9 @@ byte getTrueRotateRandomByte() {
 
   return lastByte ^ leftStack ^ rightStack;
 }
-
 #endif
 
-#ifdef CRC8_EN
+#if CRC8_EN
 // https://stackoverflow.com/questions/51731313/cross-platform-crc8-function-c-and-python-parity-check
 uint8_t crc8( uint8_t *addr, uint8_t len) {
       uint8_t crc=0;
@@ -457,3 +496,23 @@ uint8_t crc8( uint8_t *addr, uint8_t len) {
    return crc;
 }
 #endif
+
+void led_on() {
+  if (!LED_EN) return;
+  digitalWrite(LED_PIN, HIGH);
+}
+
+void led_off() {
+  if (!LED_EN) return;
+  digitalWrite(LED_PIN, LOW);
+}
+
+void Blink(uint8_t count, uint8_t pin = LED_BUILTIN) {
+  if (!LED_EN) return;
+  uint8_t state = LOW;
+
+  for (int x=0; x<(count << 1); ++x) {
+    digitalWrite(pin, state ^= HIGH);
+    delay(50);
+  }
+}
