@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RPI I2C AVR Miner 3.1 © MIT licensed
+RPI I2C Unofficial AVR Miner 3.18 © MIT licensed
 Modified by JK-Rolling
 20210919
 
@@ -42,6 +42,7 @@ import base64 as b64
 
 import os
 printlock = Semaphore(value=1)
+i2clock = Semaphore(value=1)
 
 
 # Python <3.5 check
@@ -103,15 +104,16 @@ def port_num(com):
 
 
 class Settings:
-    VER = '3.1'
+    VER = '3.18'
     SOC_TIMEOUT = 45
-    REPORT_TIME = 60
-    AVR_TIMEOUT = 10  # diff 16 * 100 / 269 h/s = 5.94 s
-    DELAY_START = 60  # 60 seconds start delay between worker to help kolka sync efficiency drop
-    CRC8_EN = "y"
+    REPORT_TIME = 120
+    AVR_TIMEOUT = 3  # diff 6 * 100 / 268 h/s = 2.24 s
+    DELAY_START = 30  # 30 seconds start delay between worker to help kolka sync efficiency drop
+    IoT_EN = "n"
     DATA_DIR = "Duino-Coin AVR Miner " + str(VER)
     SEPARATOR = ","
     ENCODING = "utf-8"
+    I2C_WR_RDDCY = 2
     try:
         # Raspberry Pi latin users can't display this character
         "‖".encode(sys.stdout.encoding)
@@ -136,11 +138,20 @@ class Settings:
 def check_mining_key(user_settings):
     user_settings = user_settings["AVR Miner"]
 
-    if user_settings["mining_key"] != "None":
-        key = b64.b64decode(user_settings["mining_key"]).decode('utf-8')
-    else:
-        key = ''
+    if user_settings["mining_key"] == "None":
+        # user manually reset .cfg file key. re-encode it
+        mining_key = user_settings["mining_key"]
+        user_settings["mining_key"] = b64.b64encode(mining_key.encode("utf-8")).decode('utf-8')
+        config["AVR Miner"] = user_settings
+        with open(Settings.DATA_DIR + '/Settings.cfg',
+                "w") as configfile:
+            config.write(configfile)
+        print("sys0",
+            Style.RESET_ALL + get_string("config_saved"),
+            "info")
+        sleep(1.5)
 
+    key = b64.b64decode(user_settings["mining_key"]).decode('utf-8')
     response = requests.get(
         "https://server.duinocoin.com/mining_key"
             + "?u=" + user_settings["username"]
@@ -148,60 +159,28 @@ def check_mining_key(user_settings):
         timeout=10
     ).json()
 
-    if response["success"] and not response["has_key"]: # if the user doesn't have a mining key
-        user_settings["mining_key"] = "None"
-        config["AVR Miner"] = user_settings
-
-        with open(Settings.DATA_DIR + '/Settings.cfg',
-            "w") as configfile:
-            config.write(configfile)
-            print("sys0",
-                Style.RESET_ALL + get_string("config_saved"),
-                "info")
-        sleep(1.5)   
-        return
-
     if not response["success"]:
-        if user_settings["mining_key"] == "None":
-            pretty_print(
-                "sys0",
-                get_string("mining_key_required"),
-                "warning")
+        pretty_print(
+            "sys0",
+            get_string("invalid_mining_key"),
+            "error")
 
+        retry = input("You want to retry? (y/n): ")
+        if retry == "y" or retry == "Y":
             mining_key = input("Enter your mining key: ")
             user_settings["mining_key"] = b64.b64encode(mining_key.encode("utf-8")).decode('utf-8')
             config["AVR Miner"] = user_settings
 
             with open(Settings.DATA_DIR + '/Settings.cfg',
-                      "w") as configfile:
+                    "w") as configfile:
                 config.write(configfile)
-                print("sys0",
-                    Style.RESET_ALL + get_string("config_saved"),
-                    "info")
+            print("sys0",
+                Style.RESET_ALL + get_string("config_saved"),
+                "info")
             sleep(1.5)
             check_mining_key(config)
         else:
-            pretty_print(
-                "sys0",
-                get_string("invalid_mining_key"),
-                "error")
-
-            retry = input("You want to retry? (y/n): ")
-            if retry == "y" or retry == "Y":
-                mining_key = input("Enter your mining key: ")
-                user_settings["mining_key"] = b64.b64encode(mining_key.encode("utf-8")).decode('utf-8')
-                config["AVR Miner"] = user_settings
-
-                with open(Settings.DATA_DIR + '/Settings.cfg',
-                        "w") as configfile:
-                    config.write(configfile)
-                print("sys0",
-                    Style.RESET_ALL + get_string("config_saved"),
-                    "info")
-                sleep(1.5)
-                check_mining_key(config)
-            else:
-                return
+            return
 
 
 class Client:
@@ -290,15 +269,22 @@ class Donate:
                         f.write(r.content)
 
     def start(donation_level):
-        if osname == 'nt':
+        donation_settings = requests.get(
+            "https://server.duinocoin.com/donations/settings.json").json()
+
+        if os.name == 'nt':
             cmd = (f'cd "{Settings.DATA_DIR}" & Donate.exe '
-                   + '-o stratum+tcp://xmg.minerclaim.net:3333 '
-                   + f'-u revox.donate -p x -s 4 -e {donation_level*3}')
-        elif osname == 'posix':
+                   + f'-o {donation_settings["url"]} '
+                   + f'-u {donation_settings["user"]} '
+                   + f'-p {donation_settings["pwd"]} '
+                   + f'-s 4 -e {donation_level*2}')
+        elif os.name == 'posix':
             cmd = (f'cd "{Settings.DATA_DIR}" && chmod +x Donate '
-                   + '&& nice -20 ./Donate -o '
-                   + 'stratum+tcp://xmg.minerclaim.net:3333 '
-                   + f'-u revox.donate -p x -s 4 -e {donation_level*3}')
+                   + '&& nice -20 ./Donate '
+                   + f'-o {donation_settings["url"]} '
+                   + f'-u {donation_settings["user"]} '
+                   + f'-p {donation_settings["pwd"]} '
+                   + f'-s 4 -e {donation_level*2}')
 
         if donation_level <= 0:
             pretty_print(
@@ -472,6 +458,7 @@ def handler(signal_received, frame):
         'sys0', get_string('sigint_detected')
         + Style.NORMAL + Fore.RESET
         + get_string('goodbye'), 'warning')
+
     _exit(0)
 
 
@@ -512,8 +499,7 @@ def load_config():
                            + Fore.RESET + Style.BRIGHT)
         if not mining_key:
             mining_key = "None"
-        else:
-            mining_key = b64.b64encode(mining_key.encode("utf-8")).decode('utf-8')
+        mining_key = b64.b64encode(mining_key.encode("utf-8")).decode('utf-8')
         
         i2c = input(
             Style.RESET_ALL + Fore.YELLOW
@@ -546,13 +532,13 @@ def load_config():
             else:
                 break
                 
-        Settings.CRC8_EN = input(
+        Settings.IoT_EN = input(
             Style.RESET_ALL + Fore.YELLOW
-            + 'Do you want to turn on CRC8 feature? (Y/n): '
+            + 'Do you want to turn on Duino IoT feature? (Y/n): '
             + Fore.RESET + Style.BRIGHT)
-        Settings.CRC8_EN = Settings.CRC8_EN.lower()
-        if len(Settings.CRC8_EN) == 0: Settings.CRC8_EN = "y"
-        elif Settings.CRC8_EN != "y": Settings.CRC8_EN = "n"
+        Settings.IoT_EN = Settings.IoT_EN.lower()
+        if len(Settings.IoT_EN) == 0: Settings.IoT_EN = "y"
+        elif Settings.IoT_EN != "y": Settings.IoT_EN = "n"
 
         rig_identifier = input(
             Style.RESET_ALL + Fore.YELLOW
@@ -590,14 +576,15 @@ def load_config():
             'identifier':       rig_identifier,
             'debug':            'n',
             "soc_timeout":      45,
-            "avr_timeout":      10,
+            "avr_timeout":      Settings.AVR_TIMEOUT,
             "delay_start":      Settings.DELAY_START,
-            "crc8_en":          Settings.CRC8_EN,
+            "duinoiot_en":      Settings.IoT_EN,
             "discord_presence": "y",
-            "periodic_report":  60,
+            "periodic_report":  Settings.REPORT_TIME,
             "shuffle_ports":    "y",
             "mining_key":       mining_key,
-            "i2c":              i2c}
+            "i2c":              i2c,
+            "i2c_wr_rddcy":     Settings.I2C_WR_RDDCY}
 
         with open(str(Settings.DATA_DIR)
                   + '/Settings.cfg', 'w') as configfile:
@@ -618,12 +605,13 @@ def load_config():
         Settings.SOC_TIMEOUT = int(config["AVR Miner"]["soc_timeout"])
         Settings.AVR_TIMEOUT = float(config["AVR Miner"]["avr_timeout"])
         Settings.DELAY_START = int(config["AVR Miner"]["delay_start"])
-        Settings.CRC8_EN = config["AVR Miner"]["crc8_en"]
+        Settings.IoT_EN = config["AVR Miner"]["duinoiot_en"]
         discord_presence = config["AVR Miner"]["discord_presence"]
         shuffle_ports = config["AVR Miner"]["shuffle_ports"]
         Settings.REPORT_TIME = int(config["AVR Miner"]["periodic_report"])
         hashrate_list = [0] * len(avrport)
         i2c = int(config["AVR Miner"]["i2c"])
+        Settings.I2C_WR_RDDCY = int(config["AVR Miner"]["i2c_wr_rddcy"])
 
 
 def greeting():
@@ -731,8 +719,8 @@ def update_rich_presence():
                                 {"label": "Join the Discord",
                                  "url": "https://discord.gg/k48Ht5y"}])
         except Exception as e:
-            #print("Error updating Discord RPC thread: " + str(e))
-            pass
+            print("Error updating Discord RPC thread: " + str(e))
+
         sleep(15)
 
 
@@ -766,9 +754,22 @@ def pretty_print(sender: str = "sys0",
               + Back.RESET + " " + fg_color + msg.strip())
         printlock.release()
 
+def worker_print(com, **kwargs):
+
+    text = ""
+    for key in kwargs:
+        text += "%s %s . " % (key, kwargs.get(key))
+    with thread_lock():
+        printlock.acquire()
+        print(Fore.WHITE + datetime.now().strftime(Style.DIM + "%H:%M:%S ")
+              + Fore.WHITE + Style.BRIGHT + Back.MAGENTA + Fore.RESET
+              + " avr" + str(com) + " " + Back.RESET + " "
+              + "worker capability report -> "
+              + text)
+        printlock.release()
 
 def share_print(id, type, accept, reject, total_hashrate,
-                computetime, diff, ping, reject_cause=None):
+                computetime, diff, ping, reject_cause=None, iot_data=None):
     """
     Produces nicely formatted CLI output for shares:
     HH:MM:S |avrN| ⛏ Accepted 0/0 (100%) ∙ 0.0s ∙ 0 kH/s ⚙ diff 0 k ∙ ping 0ms
@@ -795,6 +796,11 @@ def share_print(id, type, accept, reject, total_hashrate,
             share_str += f"{Style.NORMAL}({reject_cause}) "
         fg_color = Fore.RED
 
+    iot_text = ""
+    if iot_data:
+        (temperature, humidity) = iot_data.split("@")
+        iot_text = f"{temperature}° . "
+
     with thread_lock():
         printlock.acquire()
         print(Fore.WHITE + datetime.now().strftime(Style.DIM + "%H:%M:%S ")
@@ -807,7 +813,8 @@ def share_print(id, type, accept, reject, total_hashrate,
               + " ∙ " + str("%04.1f" % float(computetime)) + "s"
               + Style.NORMAL + " ∙ " + Fore.BLUE + Style.BRIGHT
               + str(total_hashrate) + Fore.RESET + Style.NORMAL
-              + Settings.COG + f" diff {diff} ∙ " + Fore.CYAN
+              + Settings.COG + f" diff {diff} ∙ "
+              + f"{iot_text}" + Fore.CYAN
               + f"ping {(int(ping))}ms")
         printlock.release()
 
@@ -815,14 +822,145 @@ def flush_i2c(i2c_bus,com,period=2):
     i2c_flush_start = time()
     with thread_lock():
         while True:
-            try:
-                i2c_bus.read_byte(int(com, base=16))
-            except:
-                pass
-            
-            i2c_flush_end = time()
-            if (i2c_flush_end - i2c_flush_start) > period:
+            i2c_read(i2c_bus, com)
+        
+            if (time() - i2c_flush_start) > period:
                 break
+
+def i2c_write(i2c_bus, com, i2c_data, wr_rddcy=-1):
+
+    if wr_rddcy == -1:
+        wr_rddcy = Settings.I2C_WR_RDDCY
+    debug_output(com + f': i2c_wdata=[{i2c_data}]')
+    
+    with thread_lock():
+        try:
+            i2clock.acquire()
+            for i in range(0, len(i2c_data)):
+                if wr_rddcy == 1:
+                    # write single byte i2c data
+                    i2c_bus.write_byte(int(com, base=16), 
+                                       ord(i2c_data[i]))
+                elif wr_rddcy > 1:
+                    # write repeated i2c data
+                    # help the i2cs to get the msg
+                    i2c_bus.write_i2c_block_data(int(com, base=16),
+                                                 ord(i2c_data[i]),
+                                                 [ord(i2c_data[i])]*(wr_rddcy-1))
+                sleep(0.0002)
+        except Exception as e:
+            debug_output(com + f': {e}')
+            pass
+        finally:
+            i2clock.release()
+
+def i2c_read(i2c_bus, com):
+    
+    i2c_rdata = ""
+    with thread_lock():
+        try:
+            i2clock.acquire()
+            i2c_rdata = chr(i2c_bus.read_byte(int(com, base=16)))
+        except Exception as e:
+            debug_output(com + f': {e}')
+            pass
+        finally:
+            i2clock.release()
+
+    return i2c_rdata
+
+def get_temperature(i2c_bus,com):
+    i2c_cmd = "get,temp$"
+    i2c_resp = "0.00"
+    start_time = time()
+
+    try:
+        i2c_write(i2c_bus, com, i2c_cmd)
+
+        i2c_resp = ""
+        while True:
+            i2c_rdata = i2c_read(i2c_bus, com)
+
+            if (i2c_rdata.isalnum() or ('.' in i2c_rdata)):
+                i2c_resp += i2c_rdata.strip()
+
+            if ('\n' in i2c_rdata) and (len(i2c_resp)>0):
+                break
+
+            if (time() - start_time) > Settings.AVR_TIMEOUT:
+                i2c_resp = "0.00"
+                break
+    except Exception as e:
+        debug_output(com + f': {e}')
+        pass
+
+    #debug_output(com + f': i2c_resp:[{i2c_resp}]')
+    return i2c_resp
+
+def get_humidity(i2c_bus,com):
+    # place holder
+    return "0.00"
+
+def get_worker_i2cfreq(i2c_bus,com):
+    i2c_cmd = "get,freq$"
+    default_answer = "0"
+    return send_worker_cmd(i2c_bus,com,i2c_cmd,default_answer)
+
+def send_worker_cmd(i2c_bus,com,cmd,default):
+    i2c_resp = default
+    start_time = time()
+    try:
+        i2c_write(i2c_bus, com, cmd)
+
+        i2c_resp = ""
+        while True:
+            i2c_rdata = i2c_read(i2c_bus, com)
+
+            if (i2c_rdata.isalnum()):
+                i2c_resp += i2c_rdata.strip()
+
+            if ('\n' in i2c_rdata) and (len(i2c_resp)>0):
+                break
+
+            # shouldn't take more than 2s to get response
+            if (time() - start_time) > 2:
+                i2c_resp = "0"
+                break
+    except Exception as e:
+        debug_output(com + f': {e}')
+        pass
+
+    #debug_output(com + f': i2c_resp:[{i2c_resp}]')
+    try:
+        i2c_resp = int(i2c_resp)
+    except ValueError:
+        pass
+    return i2c_resp
+
+
+def get_worker_crc8_status(i2c_bus,com):
+    i2c_cmd = "get,crc8$"
+    default_answer = "1"
+
+    return send_worker_cmd(i2c_bus,com,i2c_cmd,default_answer)
+
+def get_worker_baton_status(i2c_bus,com):
+    i2c_cmd = "get,baton$"
+    default_answer = "1"
+
+    return send_worker_cmd(i2c_bus,com,i2c_cmd,default_answer)
+
+def get_worker_core_status(i2c_bus,com):
+    i2c_cmd = "get,singlecore$"
+    default_answer = "0"
+
+    return send_worker_cmd(i2c_bus,com,i2c_cmd,default_answer)
+
+def get_worker_name(i2c_bus,com):
+    i2c_cmd = "get,name$"
+    default_answer = "unkn"
+
+    return send_worker_cmd(i2c_bus,com,i2c_cmd,default_answer)
 
 def crc8(data):
     crc = 0
@@ -838,6 +976,14 @@ def crc8(data):
             byte = byte >> 1
     return crc
 
+def is_subscript(c):
+    if c.isdigit():
+        try:
+            int(c)
+        except ValueError:
+            return True
+    return False
+
 def mine_avr(com, threadid, fastest_pool):
     global hashrate
     global bad_crc8
@@ -847,6 +993,30 @@ def mine_avr(com, threadid, fastest_pool):
     last_report_share = 0
     last_bad_crc8 = 0
     last_i2c_retry_count = 0
+    wr_rddcy = Settings.I2C_WR_RDDCY
+    avr_timeout = Settings.AVR_TIMEOUT
+    iot_data = None
+    crc8_en = 1
+    user_iot = Settings.IoT_EN
+    ducoid = ""
+    worker_type = "avr"
+
+    flush_i2c(i2c_bus, com)
+    i2c_freq = get_worker_i2cfreq(i2c_bus, com)
+    crc8_en = get_worker_crc8_status(i2c_bus, com)
+    sensor_en = get_temperature(i2c_bus, com)
+    sensor_en = 1 if sensor_en != "0" else 0
+    baton_status = get_worker_baton_status(i2c_bus, com)
+    single_core_only = get_worker_core_status(i2c_bus, com)
+    worker_name = get_worker_name(i2c_bus, com)
+
+    worker_print(com, i2c_clock=i2c_freq, crc8_en=crc8_en, 
+                sensor_en=sensor_en, baton_status=baton_status,
+                single_core_only=single_core_only, worker_name=worker_name)
+
+    if sensor_en == 0 and "y" in user_iot.lower():
+        user_iot = "n"
+        pretty_print("sys" + port_num(com), " worker do not have sensor enabled. Disabling IoT reporting", "warning")
     
     while True:
         
@@ -912,14 +1082,24 @@ def mine_avr(com, threadid, fastest_pool):
                     key = config["AVR Miner"]["mining_key"]
                     
                 debug_output(com + ': Requesting job')
-                Client.send(s, 'JOB'
-                            + Settings.SEPARATOR
-                            + str(username)
-                            + Settings.SEPARATOR
-                            + 'AVR'
-                            + Settings.SEPARATOR
-                            + str(key)
-                )
+                job_request  = 'JOB'
+                job_request += Settings.SEPARATOR
+                job_request += str(username)
+                job_request += Settings.SEPARATOR
+                job_request += 'AVR'
+                job_request += Settings.SEPARATOR
+                job_request += str(key)
+
+                if sensor_en and user_iot == "y":
+                    job_request += Settings.SEPARATOR
+                    iot_data  = get_temperature(i2c_bus,com)
+                    iot_data += "@"
+                    iot_data += get_humidity(i2c_bus,com)
+                    job_request += iot_data
+
+                debug_output(com + f": {job_request}") 
+                
+                Client.send(s, job_request)
                 job = Client.recv(s, 128).split(Settings.SEPARATOR)
                 debug_output(com + f": Received: {job[0]}")
 
@@ -939,7 +1119,7 @@ def mine_avr(com, threadid, fastest_pool):
 
             retry_counter = 0
             while True:
-                if retry_counter > 10:
+                if retry_counter > 3:
                     flush_i2c(i2c_bus,com)
                     break
 
@@ -949,61 +1129,66 @@ def mine_avr(com, threadid, fastest_pool):
                                     + Settings.SEPARATOR
                                     + job[1]
                                     + Settings.SEPARATOR
-                                    + job[2]
-                                    + Settings.SEPARATOR)
+                                    + job[2])
                                     
-                    if Settings.CRC8_EN == "y":
+                    if crc8_en :
+                        i2c_data += Settings.SEPARATOR
                         i2c_data = str(i2c_data + str(crc8(i2c_data.encode())) + '\n')
                         debug_output(com + f': Job+crc8: {i2c_data}')
                     else:
                         i2c_data = str(i2c_data + '\n')
                         debug_output(com + f': Job: {i2c_data}')
-                                    
-                    with thread_lock():
-                        for i in range(0, len(i2c_data)):
-                            try:
-                                i2c_bus.write_byte(int(com, base=16),ord(i2c_data[i]))
-                                sleep(0.0002)
-                            except Exception as e:
-                                debug_output(com + f': {e}')
-                                pass
+                        
+                    i2c_write(i2c_bus, com, i2c_data, wr_rddcy)
                     debug_output(com + ': Reading result from the board')
                     i2c_responses = ''
+                    i2c_rdata = ''
+                    substitute = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹","0123456789")
                     result = []
                     i2c_start_time = time()
                     sleep_en = True
                     while True:
-                        with thread_lock():
-                            try:
-                                i2c_rdata = chr(i2c_bus.read_byte(int(com, base=16)))
-                            except Exception as e:
-                                debug_output(com + f': {e}')
-                                pass
+                        i2c_rdata = i2c_read(i2c_bus, com)
+
+                        if is_subscript(i2c_rdata):
+                            # rare incident where MSB bit flipped
+                            i2c_rdata = i2c_rdata.translate(substitute)
+                            
+                        if ('$' in i2c_rdata):
+                            # worker cmd overflow into response area. dump it
+                            i2c_responses = ''
+                            
                         if ((i2c_rdata.isalnum()) or (',' in i2c_rdata)):
                             sleep_en = False
                             i2c_responses += i2c_rdata.strip()
+                            
                         elif ('#' in i2c_rdata):
-                            flush_i2c(i2c_bus,com)
+                            # i2cs received corrupted job
                             debug_output(com + f': Received response: {i2c_responses}')
                             debug_output(com + f': Retry Job: {job}')
-                            raise Exception("I2C data corrupted")
-                        elif sleep_en:
+                            debug_output(com + f': retransmission requested')
+                            if wr_rddcy < 32:
+                                if worker_type == "others": 
+                                    wr_rddcy += 1
+                                    debug_output(com + f': increment write redundancy bytes to {wr_rddcy}')
+                            else:
+                                debug_output(com + f': write redundancy maxed out at {wr_rddcy}')
+                            raise Exception("I2C job corrupted")
+                            
+                        if sleep_en:
+                            # pool less when worker is busy
                             # feel free to play around this number to find sweet spot for shares/s vs. stability
                             sleep(0.05)
                             
                         result = i2c_responses.split(',')
-                        if ((len(result)==4) and ('\n' in i2c_rdata) and (Settings.CRC8_EN == "y")):
+                        if (((len(result)==4 and crc8_en) or 
+                            (len(result)==3 and not crc8_en)) and 
+                            ('\n' in i2c_rdata)):
                             debug_output(com + " i2c_responses:" + f'{i2c_responses}')
                             break
                         
-                        elif ((len(result)==3) and ('\n' in i2c_rdata) and (Settings.CRC8_EN == "n")):
-                            debug_output(com + " i2c_responses:" + f'{i2c_responses}')
-                            break
-                            
-                        i2c_end_time = time()
-                        if (i2c_end_time - i2c_start_time) > Settings.AVR_TIMEOUT:
-                            flush_i2c(i2c_bus,com)
-                            debug_output(com + ' I2C timed out')
+                        if (time() - i2c_start_time) > avr_timeout:
+                            debug_output(com + ' I2C timed out after {avr_timeout}s')
                             raise Exception("I2C timed out")
 
                     if result[0] and result[1]:
@@ -1012,10 +1197,20 @@ def mine_avr(com, threadid, fastest_pool):
                             debug_output(com + ' Invalid result')
                             raise Exception("Invalid result")
                         _ = int(result[1])
-                        if not result[2].isalnum():
+                        if not result[2].isalnum() and len(ducoid) == 0:
                             debug_output(com + ' Corrupted DUCOID')
                             raise Exception("Corrupted DUCOID")
-                        if Settings.CRC8_EN == "y":
+                        if not result[2].isalnum() and len(ducoid) > 0:
+                            # ducoid corrupted
+                            # use ducoid from previous response
+                            result[2] = ducoid
+                            # reconstruct i2c_responses
+                            i2c_responses = str(result[0]
+                                                + Settings.SEPARATOR
+                                                + result[1]
+                                                + Settings.SEPARATOR
+                                                + result[2])
+                        if int(crc8_en):
                             _resp = i2c_responses.rpartition(Settings.SEPARATOR)[0]+Settings.SEPARATOR
                             result_crc8 = crc8(_resp.encode())
                             if (int(result[3]) != result_crc8):
@@ -1029,13 +1224,25 @@ def mine_avr(com, threadid, fastest_pool):
                     debug_output(com + f': Retrying data read: {e}')
                     retry_counter += 1
                     i2c_retry_count += 1
-                    #flush_i2c(i2c_bus,com,1)
+                    flush_i2c(i2c_bus,com,1)
                     continue
 
             try:
                 computetime = round(int(result[1]) / 1000000, 3)
                 num_res = int(result[0])
                 hashrate_t = round(num_res / computetime, 2)
+
+                # experimental: guess worker type. seems like larger wr_rddcy causes more harm than good on avr
+                if hashrate_t < 400:
+                    worker_type = "avr"
+                    wr_rddcy = 1
+                else:
+                    worker_type = "others"
+
+                _avr_timeout = int(((int(diff) * 100) / int(hashrate_t)) * 2)
+                if _avr_timeout > avr_timeout:
+                    debug_output(com + f': changing avr_timeout from {avr_timeout}s to {_avr_timeout}s')
+                    avr_timeout = _avr_timeout
 
                 hashrate_mean.append(hashrate_t)
                 hashrate = mean(hashrate_mean[-5:])
@@ -1052,6 +1259,7 @@ def mine_avr(com, threadid, fastest_pool):
                 debug_output(com + f': Result: {result}')
                 flush_i2c(i2c_bus,com)
                 break
+            ducoid = result[2]
 
             try:
                 Client.send(s, str(num_res)
@@ -1088,24 +1296,24 @@ def mine_avr(com, threadid, fastest_pool):
                 shares[0] += 1
                 share_print(port_num(com), "accept",
                             shares[0], shares[1], hashrate,
-                            computetime, diff, ping)
+                            computetime, diff, ping, None, iot_data)
             elif feedback[0] == 'BLOCK':
                 shares[0] += 1
                 shares[2] += 1
                 share_print(port_num(com), "block",
                             shares[0], shares[1], hashrate,
-                            computetime, diff, ping)
+                            computetime, diff, ping, None, iot_data)
             elif feedback[0] == 'BAD':
                 shares[1] += 1
                 reason = feedback[1] if len(feedback) > 1 else None
                 share_print(port_num(com), "reject",
                             shares[0], shares[1], hashrate_t,
-                            computetime, diff, ping, reason)
+                            computetime, diff, ping, reason, iot_data)
             else:
                 shares[1] += 1
                 share_print(port_num(com), "reject",
                             shares[0], shares[1], hashrate_t,
-                            computetime, diff, ping, feedback)
+                            computetime, diff, ping, feedback, iot_data)
                 debug_output(com + f': Job: {job}')
                 debug_output(com + f': Result: {result}')
                 flush_i2c(i2c_bus,com,5)
