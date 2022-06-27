@@ -4,14 +4,25 @@
   by Luiz H. Cassettari
 */
 
-// CRC8 not enabled
-// choose "n" for RPi miner CRC8 feature prompt
-
 #pragma GCC optimize ("-Ofast")
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
 #include <EEPROM.h>
 #include <Wire.h>
 #include "sha1.h"
+
+/****************** USER MODIFICATION START ****************/
+#define I2CS_FIND_ADDR              false         // to set to true, change pragma "-Ofast" to ["-O2" or "-Os"]
+#define ADDRESS_I2C                 8             // manual I2C address assignment
+#define CRC8_EN                     false
+/****************** USER MODIFICATION END ******************/
+/*---------------------------------------------------------*/
+/****************** FINE TUNING START **********************/
+#define WORKER_NAME                 "attiny85"
+#define SENSOR_EN                   false
+#define EEPROM_ADDRESS              0
+#define WIRE_MAX                    32
+#define WIRE_CLOCK                  100000
+/****************** FINE TUNING END ************************/
 
 #if defined(ARDUINO_AVR_UNO) | defined(ARDUINO_AVR_PRO)
 #define SERIAL_LOGGER Serial
@@ -21,11 +32,6 @@
 // ATtiny85 - http://drazzy.com/package_drazzy.com_index.json
 // SCL - PB2 - 2
 // SDA - PB0 - 0
-
-//#define FIND_I2C
-
-#define ADDRESS_I2C 1
-#define EEPROM_ADDRESS 0
 
 #ifdef SERIAL_LOGGER
 #define SerialBegin()              SERIAL_LOGGER.begin(115200);
@@ -56,6 +62,10 @@
 
 static const char DUCOID[] PROGMEM = "DUCOID";
 static const char ZEROS[] PROGMEM = "000";
+static const char WK_NAME[] PROGMEM = WORKER_NAME;
+static const char UNKN[] PROGMEM = "unkn";
+static const char ONE[] PROGMEM = "1";
+static const char ZERO[] PROGMEM = "0";
 
 static byte address;
 static char buffer[BUFFER_MAX];
@@ -125,12 +135,55 @@ void do_work()
     LedHigh();
     SerialPrintln(buffer);
 
-    if (buffer[0] == '#')
+    if (buffer[0] == '&')
     {
       resetFunc();
     }
 
-#ifdef FIND_I2C
+    if (buffer[0] == 'g') {
+      // i2c_cmd
+      //pos 0123[4]5678
+      //    get,[c]rc8$
+      //    get,[b]aton$
+      //    get,[s]inglecore$
+      //    get,[f]req$
+      char f = buffer[4];
+      switch (tolower(f)) {
+        case 't': // temperature
+          if (SENSOR_EN) strcpy_P(buffer, ONE);
+          else strcpy_P(buffer, ZERO);
+          SerialPrint("SENSOR_EN: ");
+          break;
+        case 'f': // i2c clock frequency
+          char w_clk[10];
+          ltoa(WIRE_CLOCK, w_clk, 10);
+          strcpy(buffer, w_clk);
+          SerialPrint("WIRE_CLOCK: ");
+          break;
+        case 'c': // crc8 status
+          if (CRC8_EN) strcpy_P(buffer, ONE);
+          else strcpy_P(buffer, ZERO);
+          SerialPrint("CRC8_EN: ");
+          break;
+        case 'n': // worker name
+          strcpy_P(buffer, WK_NAME);
+          SerialPrint("WORKER: ");
+          break;
+        default:
+          strcpy_P(buffer, UNKN);
+          SerialPrint("command: ");
+          SerialPrintln(f);
+          SerialPrint("response: ");
+      }
+      SerialPrintln(buffer);
+      buffer_position = 0;
+      buffer_length = strlen(buffer);
+      working = false;
+      jobdone = true;
+      return;
+    }
+
+    #if I2CS_FIND_ADDR
     if (buffer[0] == '@')
     {
       address = find_i2c();
@@ -141,7 +194,7 @@ void do_work()
       jobdone = false;
       return;
     }
-#endif
+    #endif
 
     do_job();
   }
@@ -154,11 +207,16 @@ void do_job()
   int job = work();
   unsigned long endTime = millis();
   unsigned int elapsedTime = endTime - startTime;
+  if (job<5) elapsedTime = job*(1<<2);
+  
   memset(buffer, 0, sizeof(buffer));
   char cstr[16];
 
   // Job
-  itoa(job, cstr, 10);
+  if (job == 0)
+    strcpy(cstr,"#"); // re-request job
+  else
+    itoa(job, cstr, 10);
   strcpy(buffer, cstr);
   buffer[strlen(buffer)] = CHAR_DOT;
 
@@ -177,6 +235,15 @@ void do_job()
     strcpy(buffer + strlen(buffer), cstr);
   }
 
+  #if CRC8_EN
+  char gen_crc8[3];
+  buffer[strlen(buffer)] = CHAR_DOT;
+
+  // CRC8
+  itoa(crc8((uint8_t *)buffer, strlen(buffer)), gen_crc8, 10);
+  strcpy(buffer + strlen(buffer), gen_crc8);
+  #endif
+
   SerialPrintln(buffer);
 
   buffer_position = 0;
@@ -191,6 +258,27 @@ int work()
   char *lastHash = strtok(buffer, delimiters);
   char *newHash = strtok(NULL, delimiters);
   char *diff = strtok(NULL, delimiters);
+
+  #if CRC8_EN
+  char *received_crc8 = strtok(NULL, delimiters);
+  // do crc8 checks here
+  uint8_t job_length = 3; // 3 commas
+  job_length += strlen(lastHash) + strlen(newHash) + strlen(diff);
+  char buffer_temp[job_length+1];
+  strcpy(buffer_temp, lastHash);
+  strcat(buffer_temp, delimiters);
+  strcat(buffer_temp, newHash);
+  strcat(buffer_temp, delimiters);
+  strcat(buffer_temp, diff);
+  strcat(buffer_temp, delimiters);
+  
+  if (atoi(received_crc8) != crc8((uint8_t *)buffer_temp,job_length)) {
+    // data corrupted
+    SerialPrintln("CRC8 mismatched. Abort..");
+    return 0;
+  }
+  #endif
+  
   buffer_length = 0;
   buffer_position = 0;
   return work(lastHash, newHash, atoi(diff));
@@ -247,19 +335,19 @@ void initialize_i2c(void) {
   Wire.onRequest(onRequestResult);
 }
 
-void onReceiveJob(int howMany) {
+void onReceiveJob(uint8_t howMany) {    
   if (howMany == 0) return;
   if (working) return;
   if (jobdone) return;
-
+  
+  char c = Wire.read();
+  buffer[buffer_length++] = c;
+  if (buffer_length == BUFFER_MAX) buffer_length--;
+  if (c == CHAR_END || c == '$') {
+    working = true;
+  }
   while (Wire.available()) {
-    char c = Wire.read();
-    buffer[buffer_length++] = c;
-    if (buffer_length == BUFFER_MAX) buffer_length--;
-    if (c == CHAR_END)
-    {
-      working = true;
-    }
+    Wire.read();
   }
 }
 
@@ -271,6 +359,7 @@ void onRequestResult() {
       jobdone = false;
       buffer_position = 0;
       buffer_length = 0;
+      memset(buffer, 0, sizeof(buffer));
     }
   }
   Wire.write(c);
@@ -280,7 +369,7 @@ void onRequestResult() {
 // find_i2c
 // --------------------------------------------------------------------- //
 
-#ifdef FIND_I2C
+#if I2CS_FIND_ADDR
 
 byte find_i2c()
 {
@@ -288,7 +377,7 @@ byte find_i2c()
   delayMicroseconds(time);
   Wire.begin();
   int address;
-  for (address = 1; address < 127; address++ )
+  for (address = 1; address < WIRE_MAX; address++ )
   {
     Wire.beginTransmission(address);
     int error = Wire.endTransmission();
@@ -366,4 +455,22 @@ byte getTrueRotateRandomByte() {
   return lastByte ^ leftStack ^ rightStack;
 }
 
+#endif
+
+#if CRC8_EN
+// https://stackoverflow.com/questions/51731313/cross-platform-crc8-function-c-and-python-parity-check
+uint8_t crc8( uint8_t *addr, uint8_t len) {
+      uint8_t crc=0;
+      for (uint8_t i=0; i<len;i++) {
+         uint8_t inbyte = addr[i];
+         for (uint8_t j=0;j<8;j++) {
+             uint8_t mix = (crc ^ inbyte) & 0x01;
+             crc >>= 1;
+             if (mix) 
+                crc ^= 0x8C;
+         inbyte >>= 1;
+      }
+    }
+   return crc;
+}
 #endif
