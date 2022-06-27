@@ -9,6 +9,8 @@ Raspberry Pi AVR I2C Bus 1 [tutorial video](https://youtu.be/bZ2XwPpYtiw)
 
 Raspberry Pi AVR I2C Bus 0 [tutorial video](https://youtu.be/ywO7j4yqIlg)
 
+Raspberry Pi Pico (coming soon)
+
 ## Python Environment Setup
 
 ### Linux
@@ -25,6 +27,9 @@ Use `sudo raspi-config` to enable I2C. Refer detailed steps at [raspberry-pi-i2c
 
 For RPI I2C Bus 0, extra step is needed, `sudo nano /boot/config.txt` and add `dtparam=i2c_vc=on`, save and reboot
 
+For RPi Pico as worker, the RPi master is strongly recomended to use 400kHz/1MHz SCL clock frequency. again, `sudo nano /boot/config.txt`,
+ add `dtparam=i2c_baudrate=1000000` and `dtparam=i2c_vc_baudrate=1000000` for 1MHz. Change to 400000 if you prefer 400kHz SCL.
+
 Finally, connect your I2C AVR miner and launch the software (e.g. `python3 ./AVR_Miner_RPI.py`)
 
 ### Windows
@@ -38,11 +43,11 @@ Finally, connect your I2C AVR miner and launch the software (e.g. `python3 ./AVR
 
 ## Version
 
-DuinoCoinI2C_RPI Version 3.1
+DuinoCoinI2C_RPI Version 3.18
 
 # Arduino - Slave
 
-Arduino shall use `DuinoCoin_RPI_Tiny_Slave` sketch.
+Arduino shall use `DuinoCoin_RPI_Tiny_Slave` sketch. LLC is required if Arduino is operating at 5V.
 
 Occasionally slaves might hang and not responding to master. quick workaround is to press the reset button on the slave to bring it back.
 
@@ -50,93 +55,62 @@ Once in a blue moon, one of the slave might pull down the whole bus with it. pow
 
 To solve these issues permanently, update Nano with Optiboot bootloader. WDT will auto reset the board if there is no activity within 8s.
 
-Uncomment this line to activate the WDT. works for Nano clone as well. **make sure the Nano is using Optiboot**
+Change this line to `true` to activate the WDT. works for Nano clone as well. **make sure the Nano is using Optiboot**
 
-`#define WDT_EN`
+`#define WDT_EN true`
 
-4 main feature can be turn on/off individually to cater for your specific scenario. comment out to disable.
+feature can be turn on/off individually to cater for your specific scenario. set to false to disable.
 ```C
-#define FIND_I2C
-#define WDT_EN
-#define CRC8_EN
-#define HASHRATE_FORCE
+#define I2CS_FIND_ADDR false
+#define WDT_EN true
+#define CRC8_EN true
+#define LED_EN true
 ```
 |`#define`| Note |
 |:-| :---- |
-|FIND_I2C|Scan available I2CS address and self-assign|
+|DEV_INDEX|device index to help assign I2C address|
+|I2CS_START_ADDRESS|this and `DEV_INDEX` summation will produce final I2C address|
+|I2CS_FIND_ADDR|Scan available I2CS address and self-assign, overriding `DEV_INDEX`. Recommend to set `false`|
 |WDT_EN|Auto self-reset every 8s in case of inactivity|
 |CRC8_EN|I2C CRC8 insertion and data integrity checks|
-|HASHRATE_FORCE*|Force the hashrate to be 258H/s ±5H/s|
+|LED_EN|Blink when share is found|
 
-\* **use at own risk**
+each SBC have different starting I2CS address from `i2cdetect` command. Address that is not shown is still usable. To change the I2CS starting address, modify `I2CS_START_ADDRESS`
 
-each SBC have different starting I2CS address from `i2cdetect` command. Address that is not shown is still usable. To change the I2CS starting address, modify `#define I2CS_START_ADDRESS 8`
-
-For disabled `FIND_I2C`, manually assign I2CS address by modifying `#define DEV_INDEX 0`
+For disabled `I2CS_FIND_ADDR`, manually assign I2CS address by updating `DEV_INDEX`. `I2CS_FIND_ADDR` is best effort basis, it may or may not work.
 
 # ATtiny85 - Slave
 
-Use `DuinoCoin_ATTiny_Slave` for ATtiny85. CRC8 feature should be disabled from Python miner
-
-Will look into adding more feature in near future
-
+Use `DuinoCoin_ATTiny_Slave` for ATtiny85. LLC is required if worker is operating at 5V.
 
 # Raspberry Pi Pico - Slave
 
-Use Pico slave code for Raspberry Pi Pico. Logic Level Converter (LLC) is not required as both RPi and Pico operates at 3.3V.
+Use Pico dual core code for Raspberry Pi Pico. Logic Level Converter (LLC) is not required as both RPi and Pico operates at 3.3V.
 
-## Arduino Mbed OS RP2040 version 2.3.1
+Read `kdb.ino` for detailed setup steps in Arduino IDE
 
-For out-of-box experience, use Arduino Mbed OS RP2040 Boards **version 2.3.1**. Install it from Arduino IDE board manager
+## RP2040 board package from Earle F. Philhower, III
 
-Default I2C pin `SDA - GP6` `SCL - GP7`
+For out-of-box experience, add `https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json` to `Additional Board Manager URLs` in Arduino IDE, then search for RP2040 Boards **version 2.2.1**. Install it from Arduino IDE board manager
 
-## Arduino Mbed OS RP2040 version 2.8.0
+Default I2C pin `SDA0 - GP20` `SCL0 - GP21` `SDA1 - GP26` `SCL1 - GP27`
 
-For version 2.8.0, hack `.../packages/arduino/hardware/mbed_rp2040/2.8.0/libraries/Wire/Wire.cpp` line:155
-
-From `char buf[240];` to `char buf[72];`. This hack should solve Pico pulling down SCL after receiving first job
-
-Default I2C pin `SDA - GP4` `SCL - GP5`
 
 ## Relocating I2C pins
 
-User can change the I2C pin by modifying `pins_arduino.h` file installed in mbed_rp2040.
+User can change the I2C pin by modifying pin value in `DuinoCoin_RPI_Pico_DualCore.ino`
+
+`#define I2C0_SDA                    20`
+`#define I2C0_SCL                    21`
+`#define I2C1_SDA                    26`
+`#define I2C1_SCL                    27`
 
 The motivation to change the default I2C pin is to make the board rig building friendly because now the I2C pin have the same side as the `Vsys` pin
-
-Depending on how the Arduino IDE was configured, usually the file is located in `.../packages/arduino/hardware/mbed_rp2040/2.3.1/variants/RASPBERRY_PI_PICO/pins_arduino.h`
-
-* On GNU/Linux: ~/.arduino15/packages/
-* On Windows: %AppData%\Arduino15\packages\
-* On macOS: ~/Library/Arduino15/packages/
-
-**Example**
-
-**From**
-```C
-// DEFAULT
-// SDA - PIN9/GP6
-// SCL - PIN10/GP7
-#define PIN_WIRE_SDA        (6u)
-#define PIN_WIRE_SCL        (7u)
-```
-
-**To**
-```C
-// USER MODIFIED
-// SDA - PIN31/GP26
-// SCL - PIN32/GP27
-#define PIN_WIRE_SDA        (26u)
-#define PIN_WIRE_SCL        (27u)
-```
-
-<img src="Resources/raspberry-pi-pico-pinout.jpg" alt="pico" width="100%">
-
 
 ## Library Dependency
 
 * [ArduinoUniqueID](https://github.com/ricaun/ArduinoUniqueID) (Handle the chip ID)
+* [StreamString](https://github.com/ricaun/StreamJoin)
 
 ## I2C Address 
 
@@ -153,17 +127,23 @@ The master requests the job on the `DuinoCoin` server and sends the work to the 
 
 After the job is done, the slave sends back the response to the master (SBC) and then sends back to the `DuinoCoin` server.
 
+## IoT Feature
+
+RPi Pico have built in temperature sensor that made IoT reporting possible.
+
+For other worker, it is possible to add external sensor and enhance worker sketch to read them. But it is outside of the scope.
+
 ## CRC8 Feature
 
-During setup, user can choose to turn on/off CRC8 feature. This option applies to all workers.
+During setup, Python will auto discover worker CRC8 status. This option applies to all workers.
 
-CRC8 feature is ON by default. To disable it, upload sketch with `//#define CRC8_EN` commented and choose `n` during CRC8 prompt in Python miner setup
+CRC8 feature is ON by default. To disable it, upload sketch with `#define CRC8_EN false`
 
 ## Max Client/Slave
 
-The code theoretically supports up to 111 clients on Raspberry PI (Bullseye OS) on single I2C bus
+The code theoretically supports up to 119 clients on Raspberry PI (Bullseye OS) on single I2C bus
 
-Slave addresses range from 0x8..0x77
+Slave addresses range from 0x0..0x77
 
 Some reported that I2C addresses that did not shows up from `i2cdetect` are accessible
 
@@ -175,7 +155,7 @@ Google or refer to [raspberry-pi-i2c](https://pimylifeup.com/raspberry-pi-i2c/)
 
 For RPI I2C Bus 0, there might not be pull up resistor built in. It relies on the pull up from Nano.
 
-For other I2C slave that do not have pull up capability, add 2KOhm resistor to both SDA and SCL line on I2C bus 0.
+For other I2C slave that do not have pull up capability, add 4k7 Ohm resistor to both SDA and SCL line on I2C bus 0.
 
 **Note:** If you see bad shares, it could be due to a bug in [RPI I2C hardware](https://github.com/raspberrypi/linux/issues/254)
 
@@ -197,14 +177,27 @@ Connect the pins of the Raspberry PI on the Arduino like the table/images below,
 |`SDA`| PIN 3 | <---> | PB0 |
 |`SCL`| PIN 5 | <---> | PB2 |
 
-|| RPI || Pico |
+For dual I2C master and dual I2C slave interface
+
+|| RPI (dual I2C) || Pico |
 |:-:| :----: | :-----: | :-----: |
 ||3.3V or 5V | <---> | VSYS* |
 ||GND | <---> | GND |
-|`SDA`| PIN 3 | <---> | GP6 |
-|`SCL`| PIN 5 | <---> | GP7 |
+|`SDA1`| PIN 3 | <---> | GP26 |
+|`SCL1`| PIN 5 | <---> | GP27 |
+|`SDA0`| PIN 27 | <---> | GP20 |
+|`SCL0`| PIN 28 | <---> | GP21 |
 
-\* VSYS accept voltage range from 1.8V to 5.5V. Voltage regulator onboard will generate 3.3V for rp2040 use
+For single I2C master and dual I2C slave interface
+
+|| RPI (single I2C) || Pico |
+|:-:| :----: | :-----: | :-----: |
+||3.3V or 5V | <---> | VSYS* |
+||GND | <---> | GND |
+|`SDA1`| PIN 3 | <---> | GP26, GP20 |
+|`SCL1`| PIN 5 | <---> | GP27, GP21 |
+
+\* VSYS accept voltage range from 1.8V to 5.5V. Voltage regulator onboard Pico will generate 3.3V for rp2040 use
 
 ## Benchmarks of tested devices
 
@@ -212,7 +205,7 @@ Connect the pins of the Raspberry PI on the Arduino like the table/images below,
   |-----------------------------------------------------------|-----------------------------------|-------------------|
   | Arduino Pro Mini, Uno, Nano etc.<br>(Atmega 328p/pb/16u2) | 268 H/s                           | 1                 |
   | Adafruit Trinket 5V Attiny85                              | 258 H/s                           | 1                 |
-  | Raspberry Pi Pico                                         | 16 kH/s                           | 1                 |
+  | Raspberry Pi Pico                                         | 4.7 kH/s                          | 2                 |
 
 # License and Terms of service
 
