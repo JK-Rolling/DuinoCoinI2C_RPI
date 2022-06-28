@@ -510,6 +510,7 @@ def load_config():
         if ossystem(f'i2cdetect -y {i2c}') != 0:
             print(Style.RESET_ALL + Fore.RED
                     + 'I2C is disabled. Exiting..')
+            _exit(1)
         else :
             print(Style.RESET_ALL + Fore.YELLOW
                 + 'i2cdetect has found I2C addresses above')
