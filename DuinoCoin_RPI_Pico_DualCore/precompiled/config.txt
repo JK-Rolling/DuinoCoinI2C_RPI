@@ -1,0 +1,19 @@
+File: DuinoCoin_RPI_Pico_DualCore.ino.rpipico.uf2
+was compiled with settings below.
+Once loaded into RPi Pico, it should auto self-assign I2C address starting from 0x8
+
+#define DEV_INDEX                   0
+#define I2CS_START_ADDRESS          8
+#define I2CS_FIND_ADDR              true               // >>> see kdb before setting it to true <<<
+#define WIRE_CLOCK                  1000000             // >>> see kdb before changing this I2C clock frequency <<<
+#define I2C0_SDA                    20
+#define I2C0_SCL                    21
+#define I2C1_SDA                    26
+#define I2C1_SCL                    27
+#define CRC8_EN                     true
+#define WDT_EN                      true
+#define CORE_BATON_EN               false
+#define LED_EN                      true
+#define SENSOR_EN                   true
+#define SINGLE_CORE_ONLY            false               // >>> see kdb before setting it to true <<<
+#define WORKER_NAME                 "rp2040"
