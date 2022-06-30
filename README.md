@@ -91,7 +91,7 @@ Read `kdb.ino` for detailed setup steps in Arduino IDE
 
 ## RP2040 board package from Earle F. Philhower, III
 
-For out-of-box experience, add `https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json` to `Additional Board Manager URLs` in Arduino IDE, then search for RP2040 Boards **version 2.2.1**. Install it from Arduino IDE board manager
+For good out-of-box experience, add `https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json` to `Additional Board Manager URLs` in Arduino IDE, then search for RP2040 Boards **version 2.2.1 or above**. Install it from Arduino IDE board manager
 
 Default I2C pin `SDA0 - GP20` `SCL0 - GP21` `SDA1 - GP26` `SCL1 - GP27`
 
@@ -116,7 +116,7 @@ The motivation to change the default I2C pin is to make the board rig building f
 
 The I2C Address on the Arduino is hardcoded by user. if an address already exists on the I2C bus, the behavior is undefined
 
-Change the value on the define for each Nano for unique address:
+Change the value on the define for each worker for unique address:
 ```
 #define DEV_INDEX 1
 ```
@@ -137,7 +137,7 @@ For other worker, it is possible to add external sensor and enhance worker sketc
 
 During setup, Python will auto discover worker CRC8 status. This option applies to all workers.
 
-CRC8 feature is ON by default. To disable it, upload sketch with `#define CRC8_EN false`
+CRC8 feature is ON by default. To disable it, use `#define CRC8_EN false`
 
 ## Max Client/Slave
 
@@ -211,7 +211,7 @@ Connect the pins of the Raspberry PI on the Arduino like the table/images below,
   | Adafruit Trinket 5V Attiny85                              | 258 H/s                           | 1                 |
   | Raspberry Pi Pico                                         | 4.7 kH/s*                         | 2                 |
   
-  \* at 100MHz
+  \* CPU at 100MHz
 
 # License and Terms of service
 
