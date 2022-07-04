@@ -21,6 +21,7 @@
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
 #include "TinyWireS.h"
 #include "sha1.h"
+#include <avr/power.h>
 
 /****************** USER MODIFICATION START ****************/
 #define WDT_EN                      true
@@ -99,6 +100,7 @@ void(* resetFunc) (void) = 0;//declare reset function at address 0
 // --------------------------------------------------------------------- //
 
 void setup() {
+  if (F_CPU == 16000000) clock_prescale_set(clock_div_1);
   SerialBegin();
   initialize_i2c();
   #if WDT_EN
