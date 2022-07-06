@@ -985,6 +985,19 @@ def is_subscript(c):
             return True
     return False
 
+def debouncer(fname, i2c_bus, com):
+    count=0
+    max_retry=10
+    while count < max_retry:
+        result = eval(fname+'(i2c_bus,com)')
+        sleep(0.2)
+        _result = eval(fname+'(i2c_bus,com)')
+        if result == _result:
+            break
+        sleep(0.2)
+        count += 1
+    return result
+
 def mine_avr(com, threadid, fastest_pool):
     global hashrate
     global bad_crc8
@@ -1004,7 +1017,7 @@ def mine_avr(com, threadid, fastest_pool):
 
     flush_i2c(i2c_bus, com)
     i2c_freq = get_worker_i2cfreq(i2c_bus, com)
-    crc8_en = get_worker_crc8_status(i2c_bus, com)
+    crc8_en = debouncer("get_worker_crc8_status", i2c_bus, com)
     sensor_en = get_temperature(i2c_bus, com)
     sensor_en = 1 if sensor_en != "0" else 0
     baton_status = get_worker_baton_status(i2c_bus, com)
