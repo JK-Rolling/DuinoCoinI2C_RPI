@@ -69,7 +69,7 @@ void core0_abort_loop() {
     SerialPrintln("core0 detected crc8 hash mismatch. Re-request job..");
     while (core0_bufferReceive.available()) core0_bufferReceive.read();
     core0_bufferRequest.print("#\n");
-    if (WDT_EN) {
+    if (WDT_EN && wdt_pet) {
       watchdog_update();
     }
     Blink(BLINK_BAD_CRC, LED_PIN);
@@ -130,7 +130,7 @@ bool core0_loop() {
     else if (action == "set") {
       // not used at the moment
     }
-    if (WDT_EN) {
+    if (WDT_EN && wdt_pet) {
       watchdog_update();
     }
   }
@@ -223,7 +223,7 @@ uint32_t core0_ducos1a(String lastblockhash, String newblockhash,
       // If expected hash is equal to the found hash, return the result
       return ducos1res;
     }
-    if (WDT_EN) {
+    if (WDT_EN && wdt_pet) {
       if (core0_max_elapsed(millis(), wdt_period_half)) {
         watchdog_update();
       }
