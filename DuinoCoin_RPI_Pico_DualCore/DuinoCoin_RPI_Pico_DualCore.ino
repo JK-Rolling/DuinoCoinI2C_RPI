@@ -55,6 +55,7 @@ extern "C" {
 #define I2CS_MAX                    32
 #define DIFF_MAX                    1000
 #define DUMMY_DATA                  "    "
+#define MCORE_WDT_THRESHOLD         10
 /****************** FINE TUNING END ************************/
 
 #ifdef SERIAL_LOGGER
@@ -77,10 +78,14 @@ void Blink(uint8_t count, uint8_t pin);
 static String DUCOID;
 static mutex_t serial_mutex;
 static bool core_baton;
+static bool wdt_pet = true;
 static uint16_t wdt_period_half = WDT_PERIOD/2;
 // 40+40+20+3 is the maximum size of a job
 const uint16_t job_maxsize = 104;
 byte i2c1_addr=0;
+bool core0_started = false, core1_started = false;
+uint32_t core0_shares = 0, core0_shares_ss = 0, core0_shares_local = 0;
+uint32_t core1_shares = 0, core1_shares_ss = 0, core1_shares_local = 0;
 
 // Core0
 void setup() {
@@ -141,11 +146,31 @@ void setup() {
 void loop() {
   if (core_baton || !CORE_BATON_EN) {
     if (core0_loop()) {
+      core0_started = true;
       printMsg(F("core0 job done :"));
       printMsg(core0_response());
       Blink(BLINK_SHARE_FOUND, LED_PIN);
-      if (WDT_EN) {
+      if (WDT_EN && wdt_pet) {
         watchdog_update();
+      }
+      
+      if (core0_started && core1_started && !SINGLE_CORE_ONLY) {
+        core0_shares++;
+        if (core1_shares != core1_shares_ss) {
+          core1_shares_ss = core1_shares;
+          core1_shares_local = 0;
+        }
+        else {
+          printMsgln("core0: core1 " + String(MCORE_WDT_THRESHOLD - core1_shares_local) + " remaining count to WDT disable");
+          
+          if (core1_shares_local >= MCORE_WDT_THRESHOLD) {
+            printMsgln("core0: Detected core1 hung. Disable WDT");
+            wdt_pet = false;
+          }
+          if ((MCORE_WDT_THRESHOLD - core1_shares_local) != 0) {
+            core1_shares_local++;
+          }
+        }
       }
     }
     if (!SINGLE_CORE_ONLY)
@@ -165,11 +190,30 @@ void setup1() {
 void loop1() {
   if (!core_baton || !CORE_BATON_EN) {
     if (core1_loop()) {
+      core1_started = true;
       printMsg(F("core1 job done :"));
       printMsg(core1_response());
       Blink(BLINK_SHARE_FOUND, LED_PIN);
-      if (WDT_EN) {
+      if (WDT_EN && wdt_pet) {
         watchdog_update();
+      }
+
+      if (core0_started && core1_started && !SINGLE_CORE_ONLY) {
+        core1_shares++;
+        if (core0_shares != core0_shares_ss) {
+          core0_shares_ss = core0_shares;
+          core0_shares_local = 0;
+        }
+        else {
+          printMsgln("core1: core0 " + String(MCORE_WDT_THRESHOLD - core0_shares_local) + " remaining count to WDT disable");
+          if (core0_shares_local >= MCORE_WDT_THRESHOLD) {
+            printMsgln("core1: Detected core0 hung. Disable WDT");
+            wdt_pet = false;
+          }
+          if ((MCORE_WDT_THRESHOLD - core0_shares_local) != 0) {
+            core0_shares_local++;
+          }
+        }
       }
     }
     core_baton = true;
