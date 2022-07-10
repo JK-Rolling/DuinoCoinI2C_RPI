@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RPI I2C Unofficial AVR Miner 3.18 © MIT licensed
+RPI I2C Unofficial AVR Miner 3.2 © MIT licensed
 Modified by JK-Rolling
 20210919
 
@@ -22,7 +22,7 @@ from configparser import ConfigParser
 from pathlib import Path
 
 from json import load as jsonload
-import json
+from random import choice
 from locale import LC_ALL, getdefaultlocale, getlocale, setlocale
 
 from re import sub
@@ -104,8 +104,8 @@ def port_num(com):
 
 
 class Settings:
-    VER = '3.18'
-    SOC_TIMEOUT = 45
+    VER = '3.2'
+    SOC_TIMEOUT = 15
     REPORT_TIME = 120
     AVR_TIMEOUT = 3  # diff 6 * 100 / 268 h/s = 2.24 s
     DELAY_START = 30  # 30 seconds start delay between worker to help kolka sync efficiency drop
@@ -489,11 +489,21 @@ def load_config():
             + Fore.YELLOW + get_string('wallet') + Fore.RESET
             + get_string('register_warning'))
 
-        username = input(
-            Style.RESET_ALL + Fore.YELLOW
-            + get_string('ask_username')
-            + Fore.RESET + Style.BRIGHT)
-            
+        correct_username = False
+        while not correct_username:
+            username = input(
+                Style.RESET_ALL + Fore.YELLOW
+                + get_string('ask_username')
+                + Fore.RESET + Style.BRIGHT)
+            if not username:
+                username = choice(["revox", "Bilaboz"])
+
+            r = requests.get(f"https://server.duinocoin.com/users/{username}", 
+                             timeout=Settings.SOC_TIMEOUT).json()
+            correct_username = r["success"]
+            if not correct_username:
+                print(get_string("incorrect_username"))
+
         mining_key = input(Style.RESET_ALL + Fore.YELLOW
                            + get_string("ask_mining_key")
                            + Fore.RESET + Style.BRIGHT)
