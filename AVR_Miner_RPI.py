@@ -100,7 +100,7 @@ def now():
 
 def port_num(com):
     #return str(''.join(filter(str.isdigit, com)))
-    return com
+    return "{:02x}".format(int(com,16))
 
 
 class Settings:
@@ -774,7 +774,7 @@ def worker_print(com, **kwargs):
         printlock.acquire()
         print(Fore.WHITE + datetime.now().strftime(Style.DIM + "%H:%M:%S ")
               + Fore.WHITE + Style.BRIGHT + Back.MAGENTA + Fore.RESET
-              + " avr" + str(com) + " " + Back.RESET + " "
+              + " avr" + port_num(com) + " " + Back.RESET + " "
               + "worker capability report -> "
               + text)
         printlock.release()
