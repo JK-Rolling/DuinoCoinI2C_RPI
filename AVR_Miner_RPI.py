@@ -310,7 +310,6 @@ i2c_retry_count = 0
 hashrate_mean = []
 ping_mean = []
 diff = 0
-shuffle_ports = "y"
 donator_running = False
 job = ''
 debug = 'n'
@@ -474,7 +473,6 @@ def load_config():
     global debug
     global rig_identifier
     global discord_presence
-    global shuffle_ports
     global SOC_TIMEOUT
     global i2c
 
@@ -592,7 +590,6 @@ def load_config():
             "duinoiot_en":      Settings.IoT_EN,
             "discord_presence": "y",
             "periodic_report":  Settings.REPORT_TIME,
-            "shuffle_ports":    "y",
             "mining_key":       mining_key,
             "i2c":              i2c,
             "i2c_wr_rddcy":     Settings.I2C_WR_RDDCY}
@@ -618,7 +615,6 @@ def load_config():
         Settings.DELAY_START = int(config["AVR Miner"]["delay_start"])
         Settings.IoT_EN = config["AVR Miner"]["duinoiot_en"]
         discord_presence = config["AVR Miner"]["discord_presence"]
-        shuffle_ports = config["AVR Miner"]["shuffle_ports"]
         Settings.REPORT_TIME = int(config["AVR Miner"]["periodic_report"])
         hashrate_list = [0] * len(avrport)
         i2c = int(config["AVR Miner"]["i2c"])
