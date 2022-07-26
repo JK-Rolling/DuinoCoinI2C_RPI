@@ -10,6 +10,7 @@ Raspberry Pi AVR I2C Bus 1 [tutorial video](https://youtu.be/bZ2XwPpYtiw)
 Raspberry Pi AVR I2C Bus 0 [tutorial video](https://youtu.be/ywO7j4yqIlg)
 
 Raspberry Pi Pico HW Part1 [tutorial video](https://youtu.be/yu4R4ktdubY)
+
 Raspberry Pi Pico SW Part2 (coming soon)
 
 ## Python Environment Setup
