@@ -1031,7 +1031,7 @@ def mine_avr(com, threadid, fastest_pool):
     user_iot = Settings.IoT_EN
     ducoid = ""
     start_diff = "AVR"
-    hashrate_test = True
+    hashrate_test = False
 
     flush_i2c(i2c_bus, com)
     i2c_freq = get_worker_i2cfreq(i2c_bus, com)
