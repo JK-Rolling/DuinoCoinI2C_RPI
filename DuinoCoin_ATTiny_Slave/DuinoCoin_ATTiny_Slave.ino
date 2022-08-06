@@ -4,7 +4,7 @@
   by Luiz H. Cassettari
 */
 
-#pragma GCC optimize ("-Ofast")
+#pragma GCC optimize ("-O2")
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
 #include <EEPROM.h>
 #include <Wire.h>
@@ -13,21 +13,22 @@
 /****************** USER MODIFICATION START ****************/
 #define I2CS_FIND_ADDR              false         // to set to true, change pragma "-Ofast" to ["-O2" or "-Os"]
 #define ADDRESS_I2C                 8             // manual I2C address assignment
-#define CRC8_EN                     false
+#define CRC8_EN                     true
 /****************** USER MODIFICATION END ******************/
 /*---------------------------------------------------------*/
 /****************** FINE TUNING START **********************/
 #define WORKER_NAME                 "attiny85"
 #define SENSOR_EN                   false
-#define EEPROM_ADDRESS              0
 #define WIRE_MAX                    32
 #define WIRE_CLOCK                  100000
 /****************** FINE TUNING END ************************/
-
+//#define EEPROM_ADDRESS              0
 #if defined(ARDUINO_AVR_UNO) | defined(ARDUINO_AVR_PRO)
 #define SERIAL_LOGGER Serial
 #define LED LED_BUILTIN
 #endif
+// user assign led pin if needed
+//#define LED 3
 
 // ATtiny85 - http://drazzy.com/package_drazzy.com_index.json
 // SCL - PB2 - 2
@@ -44,9 +45,9 @@
 #endif
 
 #ifdef LED
-#define LedBegin()                pinMode(LED, OUTPUT);
-#define LedHigh()                 digitalWrite(LED, HIGH);
-#define LedLow()                  digitalWrite(LED, LOW);
+#define LedBegin()                DDRB |= (1 << LED);
+#define LedHigh()                 PORTB |= (1 << LED);
+#define LedLow()                  PORTB &= ~(1 << LED);
 #define LedBlink()                LedHigh(); delay(100); LedLow(); delay(100);
 #else
 #define LedBegin()
