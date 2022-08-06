@@ -83,7 +83,7 @@ For disabled `I2CS_FIND_ADDR`, manually assign I2CS address by updating `DEV_IND
 
 # ATtiny85 - Slave
 
-Use `DuinoCoin_ATTiny_Slave` for ATtiny. LLC is required if worker and host is operating at different voltage. 4k7 pullup resistors for `SDA/SCL` pins are strongly recommended. Default compiled sketch size for ATtiny85 is 5110 bytes for program storage space and 354 bytes for dynamic memory. Estimated hashrate 259H/s
+Use `DuinoCoin_ATTiny_Slave` for ATtiny. LLC is required if worker and host is operating at different voltage. 4k7 pullup resistors for `SDA/SCL` pins are strongly recommended. The TWI/I2C/IIC seems to work well with SCL 100KHz `WIRE_CLOCK 100000`. Default compiled sketch size for ATtiny85 is 5110 bytes for program storage space and 354 bytes for dynamic memory. Estimated hashrate 259H/s
 
 add `http://drazzy.com/package_drazzy.com_index.json` to `Additional Board Manager URLs` in Arduino IDE, then go to board manager and search for `attiny` and install ATTinyCore from Spence Konde
 
