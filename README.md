@@ -228,9 +228,9 @@ Connect the pins of the Raspberry PI on the Arduino like the table/images below,
   |-----------------------------------------------------------|-----------------------------------|-------------------|
   | Arduino Pro Mini, Uno, Nano etc.<br>(Atmega 328p/pb/16u2) | 268 H/s                           | 1                 |
   | Adafruit Trinket 5V Attiny85                              | 258 H/s                           | 1                 |
-  | Raspberry Pi Pico                                         | 4.7 kH/s*                         | 2                 |
-  
-  \* CPU at 100MHz
+  | Attiny85                                                  | 259 H/s                           | 1                 |
+  | Raspberry Pi Pico                                         | 4.7 kH/s (100MHz)                 | 2                 |
+  | Raspberry Pi Pico                                         | 5.4 kH/s (120MHz)                 | 2                 |
 
 # License and Terms of service
 
