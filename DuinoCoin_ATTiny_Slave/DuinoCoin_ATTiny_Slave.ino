@@ -1,7 +1,7 @@
 /*
-  DoinoCoin_Tiny_Slave.ino
-  created 07 08 2021
-  by Luiz H. Cassettari
+  DoinoCoin_ATTiny_Slave.ino
+  adapted from Luiz H. Cassettari
+  by JK Rolling
 */
 
 #pragma GCC optimize ("-O2")
@@ -11,9 +11,10 @@
 #include "sha1.h"
 
 /****************** USER MODIFICATION START ****************/
-#define I2CS_FIND_ADDR              false         // to set to true, change pragma "-Ofast" to ["-O2" or "-Os"]
+#define I2CS_FIND_ADDR              false
 #define ADDRESS_I2C                 8             // manual I2C address assignment
 #define CRC8_EN                     true
+#define WDT_EN                      true
 /****************** USER MODIFICATION END ******************/
 /*---------------------------------------------------------*/
 /****************** FINE TUNING START **********************/
@@ -27,7 +28,7 @@
 #define SERIAL_LOGGER Serial
 #define LED LED_BUILTIN
 #endif
-// user assign led pin if needed
+// user assign led pin if needed. consumes 214 bytes
 //#define LED 3
 
 // ATtiny85 - http://drazzy.com/package_drazzy.com_index.json
@@ -84,6 +85,10 @@ void(* resetFunc) (void) = 0;//declare reset function at address 0
 
 void setup() {
   SerialBegin();
+  if (WDT_EN) {
+    wdt_disable();
+    wdt_enable(WDTO_8S);
+  }
   initialize_i2c();
   LedBegin();
   LedBlink();
@@ -112,7 +117,7 @@ void loop() {
 // --------------------------------------------------------------------- //
 // run
 // --------------------------------------------------------------------- //
-
+#if WDT_EN
 boolean runEvery(unsigned long interval)
 {
   static unsigned long previousMillis = 0;
@@ -124,7 +129,7 @@ boolean runEvery(unsigned long interval)
   }
   return false;
 }
-
+#endif
 // --------------------------------------------------------------------- //
 // work
 // --------------------------------------------------------------------- //
@@ -181,6 +186,7 @@ void do_work()
       buffer_length = strlen(buffer);
       working = false;
       jobdone = true;
+      if (WDT_EN) wdt_reset();
       return;
     }
 
@@ -251,6 +257,8 @@ void do_job()
   buffer_length = strlen(buffer);
   working = false;
   jobdone = true;
+  
+  if (WDT_EN) wdt_reset();
 }
 
 int work()
@@ -309,6 +317,9 @@ uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
     if (memcmp(Sha1.result(), newblockhash, HASH_BUFFER_SIZE) == 0)
     {
       return ducos1res;
+    }
+    if (WDT_EN) {
+      if (runEvery(2000)) wdt_reset();
     }
   }
   return 0;
