@@ -8,6 +8,7 @@
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
 #include <EEPROM.h>
 #include <Wire.h>
+#include <avr/wdt.h>
 #include "sha1.h"
 
 /****************** USER MODIFICATION START ****************/
