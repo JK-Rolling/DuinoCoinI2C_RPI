@@ -99,7 +99,7 @@ You may use dedicated ATTiny programmer or any Uno/Nano to set the fuse via `Too
 |Timer 1 Clock|CPU|
 |LTO|Enabled|
 |millis()/micros()|Enabled|
-|Save EEPROM|EEPROM not retained|
+|Save EEPROM|EEPROM retained|
 |B.O.D Level|Disabled|
 
 ## ATTiny85 Wiring
