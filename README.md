@@ -83,7 +83,7 @@ For disabled `I2CS_FIND_ADDR`, manually assign I2CS address by updating `DEV_IND
 
 # ATtiny85 - Slave
 
-Use `DuinoCoin_ATTiny_Slave` for ATtiny. LLC is required if worker and host is operating at different voltage. 4k7 pullup resistors for `SDA/SCL` pins are strongly recommended if host do not have it built-in. The TWI/I2C/IIC seems to work well with SCL 100KHz `WIRE_CLOCK 100000`. Default compiled sketch size for ATtiny85 is 5118 bytes for program storage space and 351 bytes for dynamic memory. Estimated hashrate 267H/s for ATTiny85-20PU running at 3.3V or 5V
+Use `DuinoCoin_ATTiny_Slave` for ATtiny. LLC is required if worker and host is operating at different voltage. 4k7 pullup resistors for `SDA/SCL` pins are strongly recommended if host do not have it built-in. The TWI/I2C/IIC seems to work well with SCL 100KHz `WIRE_CLOCK 100000`. Default compiled sketch size for ATtiny85 is 5630 bytes for program storage space and 351 bytes for dynamic memory. Estimated hashrate 267H/s for ATTiny85-20PU running at 3.3V or 5V. ATTiny85 also have builtin temperature sensor that can be used for IoT reporting. This feature is enabled for fun as the ADC is uncalibrated. Once calibrated, the temperature can be pretty accurate according to some. Set `TEMPERATURE_OFFSET` and `TEMPERATURE_COEFF` to calibrate. Note: floating point is costly, only proceed if you know what you're doing.
 
 add `http://drazzy.com/package_drazzy.com_index.json` to `Additional Board Manager URLs` in Arduino IDE, then go to board manager and search for `attiny` and install ATTinyCore from Spence Konde
 
@@ -107,9 +107,9 @@ You may use dedicated ATTiny programmer or any Uno/Nano to set the fuse via `Too
 <img src="Resources/attiny_rig_bb.png" alt="attiny85" width="70%">
 
 ## Reducing sketch / RAM usage
-For some smaller devices, to get smallest possible sketch size without hacking, set `CRC8_EN false`, `WDT_EN false` and change to `#pragma GCC optimize ("-Os")` for all files. You should get 4258 bytes use of program storage space and 346 bytes of dynamic memory, which produce about 222H/s at 16MHz
+For some smaller devices, to get smallest possible sketch size without hacking, set `CRC8_EN false`, `WDT_EN false`, `SENSOR_EN false` and change to `#pragma GCC optimize ("-Os")` for all files. You should get 4232 bytes use of program storage space and 343 bytes of dynamic memory, which produce about 222H/s at 16MHz
 
-to get smallest possible sketch size with hacking, use the above settings and hack file `Arduino15\packages\ATTinyCore\hardware\avr\1.5.2\libraries\Wire\src\USI_TWI_Slave\USI_TWI_Slave.h`. This should further reduce the dynamic memory usage to 322 bytes. *RELIABILITY NOT GUARANTEED*
+to get smallest possible sketch size with hacking, use the above settings and hack file `Arduino15\packages\ATTinyCore\hardware\avr\1.5.2\libraries\Wire\src\USI_TWI_Slave\USI_TWI_Slave.h`. This should further reduce the dynamic memory usage to 319 bytes. *RELIABILITY NOT GUARANTEED*
 
 ```C
 // change value from 16 to 4. somehow value of 1/2 broke TWI
@@ -181,7 +181,7 @@ Slave addresses range from 0x0..0x77
 
 Some reported that I2C addresses that did not shows up from `i2cdetect` are accessible
 
-RPi have 2 I2C buses which bring up the count up to 254 (theoretical). This requires 2 separate instances of Python miner with it's own Settings.cfg file. Duplicate the directory into 2 and start the setup from there.
+RPi have 2 I2C buses which bring up the count up to 254 (theoretical). This requires 2 separate instances of Python miner with it's own Settings.cfg file. Duplicate the directory into 2 and start the setup from there. Instance 1 should use i2cbus 1 (RPi have builtin 1k8 pullup). Instance 2 should use i2cbus 0 (where external 4k7 pullup resistor are on)
 
 ## Enable I2C on Raspberry PI
 
