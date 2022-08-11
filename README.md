@@ -49,7 +49,7 @@ DuinoCoinI2C_RPI Version 3.18
 
 # Arduino - Slave
 
-Arduino shall use `DuinoCoin_RPI_Tiny_Slave` sketch. LLC is required if Arduino is operating at 5V.
+Arduino shall use `DuinoCoin_RPI_Tiny_Slave` sketch. LLC is required if Arduino is operating at 5V and master at 3.3V. Arduino also have builtin temperature sensor that can be used for IoT reporting. This feature is enabled for fun as the ADC is uncalibrated. Once calibrated, the temperature can be pretty accurate according to some. Set `TEMPERATURE_OFFSET` and `FILTER_LP` to calibrate.
 
 Occasionally slaves might hang and not responding to master. quick workaround is to press the reset button on the slave to bring it back.
 
@@ -67,6 +67,7 @@ feature can be turn on/off individually to cater for your specific scenario. set
 #define WDT_EN true
 #define CRC8_EN true
 #define LED_EN true
+#define SENSOR_EN true
 ```
 |`#define`| Note |
 |:-| :---- |
@@ -76,6 +77,7 @@ feature can be turn on/off individually to cater for your specific scenario. set
 |WDT_EN|Auto self-reset every 8s in case of inactivity|
 |CRC8_EN|I2C CRC8 insertion and data integrity checks|
 |LED_EN|Blink when share is found|
+|SENSOR_EN|Report chip internal temperature in degree Celsius|
 
 each SBC have different starting I2CS address from `i2cdetect` command. Address that is not shown is still usable. To change the I2CS starting address, modify `I2CS_START_ADDRESS`
 
