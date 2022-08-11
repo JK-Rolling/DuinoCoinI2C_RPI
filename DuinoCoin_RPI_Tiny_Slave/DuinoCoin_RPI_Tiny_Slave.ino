@@ -4,6 +4,8 @@
   by Luiz H. Cassettari
   modified by JK Rolling
   
+  v3.25-1
+  * Added internal temperature report
   v3.18-1
   * Added worker info report support
   * support i2c data redundancy
@@ -29,6 +31,7 @@
 #define WDT_EN                      false
 #define CRC8_EN                     true
 #define LED_EN                      true
+#define SENSOR_EN                   true
 /****************** USER MODIFICATION END ******************/
 /*---------------------------------------------------------*/
 /****************** FINE TUNING START **********************/
@@ -38,9 +41,10 @@
 #define BLINK_BAD_CRC               3
 #define SERIAL_LOGGER               Serial
 #define I2CS_MAX                    32
-#define SENSOR_EN                   false
 #define WORKER_NAME                 "atmega328p"
 #define WIRE_CLOCK                  100000
+#define TEMPERATURE_OFFSET          338
+#define FILTER_LP                   0.1
 /****************** FINE TUNING END ************************/
 
 #if WDT_EN
@@ -83,6 +87,7 @@ static uint8_t buffer_position;
 static uint8_t buffer_length;
 static bool working;
 static bool jobdone;
+static double temperature_filter;
 
 void(* resetFunc) (void) = 0;//declare reset function at address 0
 void Blink(uint8_t count, uint8_t pin);
@@ -92,6 +97,11 @@ void Blink(uint8_t count, uint8_t pin);
 // --------------------------------------------------------------------- //
 void setup() {
   SerialBegin();
+
+  if (SENSOR_EN) {
+    analogReference (INTERNAL);
+    temperature_filter = readTemperature();
+  }
 
   if (LED_EN) {
     pinMode(LED_PIN, OUTPUT);
@@ -156,14 +166,15 @@ void do_work()
       char f = buffer[4];
       switch (tolower(f)) {
         case 't': // temperature
-          if (SENSOR_EN) strcpy_P(buffer, ONE);
+          if (SENSOR_EN) {
+            temperature_filter = ( FILTER_LP * readTemperature()) + (( 1.0 - FILTER_LP ) * temperature_filter);
+            ltoa(temperature_filter, buffer, 8);
+          }
           else strcpy_P(buffer, ZERO);
           SerialPrint("SENSOR_EN: ");
           break;
         case 'f': // i2c clock frequency
-          char w_clk[10];
-          ltoa(WIRE_CLOCK, w_clk, 10);
-          strcpy(buffer, w_clk);
+          ltoa(WIRE_CLOCK, buffer, 10);
           SerialPrint("WIRE_CLOCK: ");
           break;
         case 'c': // crc8 status
@@ -515,4 +526,15 @@ void Blink(uint8_t count, uint8_t pin = LED_BUILTIN) {
     digitalWrite(pin, state ^= HIGH);
     delay(50);
   }
+}
+
+static int readTemperature() {
+   ADMUX = 0xC8;                          // activate interal temperature sensor, 
+                                          // using 1.1V ref. voltage
+   ADCSRA |= _BV(ADSC);                   // start the conversion
+   while (bit_is_set(ADCSRA, ADSC));      // ADSC is cleared when the conversion 
+                                          // finishes
+                                          
+   // combine bytes & correct for temperature offset (approximate)
+   return ( (ADCL | (ADCH << 8)) - TEMPERATURE_OFFSET);  
 }
