@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RPI I2C Unofficial AVR Miner 3.25 © MIT licensed
+RPI I2C Unofficial AVR Miner 3.2 © MIT licensed
 Modified by JK-Rolling
 20210919
 
@@ -104,7 +104,7 @@ def port_num(com):
 
 
 class Settings:
-    VER = '3.25'
+    VER = '3.2'
     SOC_TIMEOUT = 15
     REPORT_TIME = 120
     AVR_TIMEOUT = 3  # diff 6 * 100 / 268 h/s = 2.24 s
@@ -310,6 +310,7 @@ i2c_retry_count = 0
 hashrate_mean = []
 ping_mean = []
 diff = 0
+shuffle_ports = "y"
 donator_running = False
 job = ''
 debug = 'n'
@@ -473,6 +474,7 @@ def load_config():
     global debug
     global rig_identifier
     global discord_presence
+    global shuffle_ports
     global SOC_TIMEOUT
     global i2c
 
@@ -590,6 +592,7 @@ def load_config():
             "duinoiot_en":      Settings.IoT_EN,
             "discord_presence": "y",
             "periodic_report":  Settings.REPORT_TIME,
+            "shuffle_ports":    "y",
             "mining_key":       mining_key,
             "i2c":              i2c,
             "i2c_wr_rddcy":     Settings.I2C_WR_RDDCY}
@@ -615,6 +618,7 @@ def load_config():
         Settings.DELAY_START = int(config["AVR Miner"]["delay_start"])
         Settings.IoT_EN = config["AVR Miner"]["duinoiot_en"]
         discord_presence = config["AVR Miner"]["discord_presence"]
+        shuffle_ports = config["AVR Miner"]["shuffle_ports"]
         Settings.REPORT_TIME = int(config["AVR Miner"]["periodic_report"])
         hashrate_list = [0] * len(avrport)
         i2c = int(config["AVR Miner"]["i2c"])
@@ -686,13 +690,6 @@ def greeting():
             + Settings.BLOCK + Style.NORMAL
             + Fore.RESET + get_string('rig_identifier')
             + Style.BRIGHT + Fore.YELLOW + rig_identifier)
-
-    print(
-        Style.DIM + Fore.MAGENTA
-        + Settings.BLOCK + Style.NORMAL
-        + Fore.RESET + get_string("using_config")
-        + Style.BRIGHT + Fore.YELLOW 
-        + str(Settings.DATA_DIR + '/Settings.cfg'))
 
     print(
         Style.DIM + Fore.MAGENTA
@@ -804,10 +801,6 @@ def share_print(id, type, accept, reject, total_hashrate,
     elif type == "block":
         share_str = get_string("block_found")
         fg_color = Fore.YELLOW
-    elif type == "test":
-        share_str = " Hashrate "
-        accept = 1
-        fg_color = Fore.GREEN
     else:
         share_str = get_string("rejected")
         if reject_cause:
@@ -1030,8 +1023,7 @@ def mine_avr(com, threadid, fastest_pool):
     crc8_en = 1
     user_iot = Settings.IoT_EN
     ducoid = ""
-    start_diff = "AVR"
-    hashrate_test = False
+    worker_type = "avr"
 
     flush_i2c(i2c_bus, com)
     i2c_freq = get_worker_i2cfreq(i2c_bus, com)
@@ -1087,7 +1079,7 @@ def mine_avr(com, threadid, fastest_pool):
                         motd = motd.replace("\n", "\n\t\t")
 
                     pretty_print("net" + str(threadid),
-                                 get_string("motd") + Fore.RESET
+                                 " MOTD: " + Fore.RESET
                                  + Style.NORMAL + str(motd),
                                  "success")
                 break
@@ -1104,9 +1096,10 @@ def mine_avr(com, threadid, fastest_pool):
                      'success')
 
         flush_i2c(i2c_bus,com)
-        
+                
         while True:
             try:
+            
                 if config["AVR Miner"]["mining_key"] != "None":
                     key = b64.b64decode(config["AVR Miner"]["mining_key"]).decode('utf-8')
                 else:
@@ -1117,7 +1110,7 @@ def mine_avr(com, threadid, fastest_pool):
                 job_request += Settings.SEPARATOR
                 job_request += str(username)
                 job_request += Settings.SEPARATOR
-                job_request += start_diff
+                job_request += 'AVR'
                 job_request += Settings.SEPARATOR
                 job_request += str(key)
 
@@ -1128,16 +1121,12 @@ def mine_avr(com, threadid, fastest_pool):
                     iot_data += get_humidity(i2c_bus,com)
                     job_request += iot_data
 
-                if hashrate_test :
-                    prev_hash = "ba29a15896fd2d792d5c4b60668bf2b9feebc51d"
-                    exp_hash = "d0beba883d7e8cd119ea2b0e09b78f60f29e0968"
-                    job = [prev_hash,exp_hash,"10"]
-                else:
-                    debug_output(com + f": {job_request}") 
-                    Client.send(s, job_request)
-                    job = Client.recv(s, 128).split(Settings.SEPARATOR)
-                    debug_output(com + f": Received: {job[0]}")
-                    
+                debug_output(com + f": {job_request}") 
+                
+                Client.send(s, job_request)
+                job = Client.recv(s, 128).split(Settings.SEPARATOR)
+                debug_output(com + f": Received: {job[0]}")
+
                 try:
                     diff = int(job[2])
                 except:
@@ -1203,7 +1192,7 @@ def mine_avr(com, threadid, fastest_pool):
                             debug_output(com + f': Retry Job: {job}')
                             debug_output(com + f': retransmission requested')
                             if wr_rddcy < 32:
-                                if start_diff != "AVR": 
+                                if worker_type == "others": 
                                     wr_rddcy += 1
                                     debug_output(com + f': increment write redundancy bytes to {wr_rddcy}')
                             else:
@@ -1263,35 +1252,16 @@ def mine_avr(com, threadid, fastest_pool):
                     continue
 
             try:
-                computetime = round(int(result[1]) / 1000000, 5)
+                computetime = round(int(result[1]) / 1000000, 3)
                 num_res = int(result[0])
                 hashrate_t = round(num_res / computetime, 2)
-                
-                if hashrate_test:
-                    exp_result = 50
-                    if num_res != exp_result:
-                        debug_output(com + f': Incorrect result received!')
-                    
-                    if hashrate_t > 5500:
-                        start_diff = "ESP8266"
-                    elif hashrate_t > 3000:
-                        start_diff = "DUE"
-                    elif hashrate_t > 1000:
-                        start_diff = "ARM"
-                    elif hashrate_t > 300:
-                        start_diff = "MEGA"
-                        
-                    pretty_print('sys' + port_num(com), 
-                                get_string('hashrate_test') 
-                                + get_prefix("H/s", hashrate_t, 2)
-                                + Fore.RESET
-                                + get_string('hashrate_test_diff') 
-                                + start_diff)
-                                
+
+                # experimental: guess worker type. seems like larger wr_rddcy causes more harm than good on avr
+                if hashrate_t < 400:
+                    worker_type = "avr"
+                    wr_rddcy = 1
                 else:
-                    if start_diff == "AVR":
-                        # experimental: seems like larger wr_rddcy causes more harm than good on avr
-                        wr_rddcy = 1
+                    worker_type = "others"
 
                 _avr_timeout = int(((int(diff) * 100) / int(hashrate_t)) * 2)
                 if _avr_timeout > avr_timeout:
@@ -1316,32 +1286,27 @@ def mine_avr(com, threadid, fastest_pool):
             ducoid = result[2]
 
             try:
-                if hashrate_test:
-                    feedback = ["TEST"]
-                    ping = 0
-                    diff = get_prefix("", int(diff), 0)
-                else:
-                    Client.send(s, str(num_res)
-                                + Settings.SEPARATOR
-                                + str(hashrate_t)
-                                + Settings.SEPARATOR
-                                + f'RPI I2C AVR Miner {Settings.VER}'
-                                + Settings.SEPARATOR
-                                + str(rig_identifier)
-                                + str(port_num(com))
-                                + Settings.SEPARATOR
-                                + str(result[2]))
+                Client.send(s, str(num_res)
+                            + Settings.SEPARATOR
+                            + str(hashrate_t)
+                            + Settings.SEPARATOR
+                            + f'RPI I2C AVR Miner {Settings.VER}'
+                            + Settings.SEPARATOR
+                            + str(rig_identifier)
+                            + str(port_num(com))
+                            + Settings.SEPARATOR
+                            + str(result[2]))
 
-                    responsetimetart = now()
-                    feedback = Client.recv(s, 64).split(",")
-                    responsetimestop = now()
+                responsetimetart = now()
+                feedback = Client.recv(s, 64).split(",")
+                responsetimestop = now()
 
-                    time_delta = (responsetimestop -
-                                  responsetimetart).microseconds
-                    ping_mean.append(round(time_delta / 1000))
-                    ping = mean(ping_mean[-10:])
-                    diff = get_prefix("", int(diff), 0)
-                    debug_output(com + f': retrieved feedback: {" ".join(feedback)}')
+                time_delta = (responsetimestop -
+                              responsetimetart).microseconds
+                ping_mean.append(round(time_delta / 1000))
+                ping = mean(ping_mean[-10:])
+                diff = get_prefix("", int(diff), 0)
+                debug_output(com + f': retrieved feedback: {" ".join(feedback)}')
             except Exception as e:
                 pretty_print('net' + port_num(com),
                              get_string('connecting_error')
@@ -1362,11 +1327,6 @@ def mine_avr(com, threadid, fastest_pool):
                 share_print(port_num(com), "block",
                             shares[0], shares[1], hashrate,
                             computetime, diff, ping, None, iot_data)
-            elif feedback[0] == 'TEST':
-                share_print(port_num(com), "test",
-                            shares[0], shares[1], hashrate,
-                            computetime, diff, ping, None, iot_data)
-                hashrate_test = False
             elif feedback[0] == 'BAD':
                 shares[1] += 1
                 reason = feedback[1] if len(feedback) > 1 else None
@@ -1507,3 +1467,4 @@ if __name__ == '__main__':
             init_rich_presence()
         except Exception as e:
             debug_output(f'Error launching Discord RPC thread: {e}')
+            
