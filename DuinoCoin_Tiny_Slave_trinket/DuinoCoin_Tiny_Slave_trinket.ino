@@ -1,53 +1,39 @@
 /*
-  DoinoCoin_Tiny_Slave_trinket.ino
-  created 07 08 2021
-  by Luiz H. Cassettari
-  Modified by JK-Rolling
-  
-  12 Sep 2021
-  for Adafruit Trinket attiny85
-  v3.18-1
-  * Added worker info report support
-  * support i2c data redundancy
-  V3.0-1
-  * use -O2 optimization
-  v2.7.5-2
-  * added HASHRATE_FORCE
-  v2.7.5-1
-  * added CRC8 checks
-  * added WDT to auto reset after 8s of inactivity
+  DoinoCoin_ATTiny_Slave.ino
+  adapted from Luiz H. Cassettari
+  by JK Rolling
 */
+
 #pragma GCC optimize ("-O2")
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
-#include "TinyWireS.h"
-#include "sha1.h"
+#include <EEPROM.h>
+#include <TinyWireS.h>
+#include <avr/wdt.h>
 #include <avr/power.h>
+#include "sha1.h"
 
 /****************** USER MODIFICATION START ****************/
+#define ADDRESS_I2C                 8              // manual I2C address assignment
+#define CRC8_EN                     true
 #define WDT_EN                      true
-#define CRC8_EN                     false
-#define DEV_INDEX                   0
-#define I2CS_START_ADDRESS          8
+#define SENSOR_EN                   false          // use ATTiny85 internal temperature sensor (+346 Bytes)
 /****************** USER MODIFICATION END ******************/
 /*---------------------------------------------------------*/
 /****************** FINE TUNING START **********************/
 #define WORKER_NAME                 "trinket"
-#define SENSOR_EN                   false
 #define WIRE_MAX                    32
 #define WIRE_CLOCK                  100000
-#define LED                         LED_BUILTIN
+#define TEMPERATURE_OFFSET          299           // calibrate ADC here
+#define TEMPERATURE_COEFF           1             // calibrate ADC further
 /****************** FINE TUNING END ************************/
-
-#if WDT_EN
-#include <avr/wdt.h>
-#endif
-
+//#define EEPROM_ADDRESS              0
 #if defined(ARDUINO_AVR_UNO) | defined(ARDUINO_AVR_PRO)
 #define SERIAL_LOGGER Serial
 #endif
+// user assign led pin if needed
+#define LED LED_BUILTIN
 
-
-// Adafruit Trinket ATtiny85 https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
+// ATtiny85 - https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
 // SCL - PB2 - 2
 // SDA - PB0 - 0
 
@@ -62,9 +48,9 @@
 #endif
 
 #ifdef LED
-#define LedBegin()                pinMode(LED, OUTPUT);
-#define LedHigh()                 digitalWrite(LED, HIGH);
-#define LedLow()                  digitalWrite(LED, LOW);
+#define LedBegin()                DDRB |= (1 << LED);
+#define LedHigh()                 PORTB |= (1 << LED);
+#define LedLow()                  PORTB &= ~(1 << LED);
 #define LedBlink()                LedHigh(); delay(100); LedLow(); delay(100);
 #else
 #define LedBegin()
@@ -73,7 +59,7 @@
 #define LedBlink()
 #endif
 
-#define BUFFER_MAX 90
+#define BUFFER_MAX 88
 #define HASH_BUFFER_SIZE 20
 #define CHAR_END '\n'
 #define CHAR_DOT ','
@@ -92,7 +78,6 @@ static uint8_t buffer_length;
 static bool working;
 static bool jobdone;
 
-
 void(* resetFunc) (void) = 0;//declare reset function at address 0
 
 // --------------------------------------------------------------------- //
@@ -100,18 +85,26 @@ void(* resetFunc) (void) = 0;//declare reset function at address 0
 // --------------------------------------------------------------------- //
 
 void setup() {
-  if (F_CPU == 16000000) clock_prescale_set(clock_div_1);
+  clock_prescale_set(clock_div_1);
+  if (SENSOR_EN) {
+    // Setup the Analog to Digital Converter -  one ADC conversion
+    //   is read and discarded
+    ADCSRA &= ~(_BV(ADATE) |_BV(ADIE)); // Clear auto trigger and interrupt enable
+    ADCSRA |= _BV(ADEN);                // Enable AD and start conversion
+    ADMUX = 0xF | _BV( REFS1 );         // ADC4 (Temp Sensor) and Ref voltage = 1.1V;
+    delay(3);                           // Settling time min 1ms
+    getADC();                           // discard first read
+  }
   SerialBegin();
+  if (WDT_EN) {
+    wdt_disable();
+    wdt_enable(WDTO_8S);
+  }
   initialize_i2c();
-  #if WDT_EN
-  wdt_disable();
-  wdt_enable(WDTO_8S);
-  #endif
   LedBegin();
   LedBlink();
   LedBlink();
   LedBlink();
-  SerialPrintln("Startup Done!");
 }
 
 // --------------------------------------------------------------------- //
@@ -121,6 +114,15 @@ void setup() {
 void loop() {
   do_work();
   millis(); // ????? For some reason need this to work the i2c
+#ifdef SERIAL_LOGGER
+  if (SERIAL_LOGGER.available())
+  {
+#ifdef EEPROM_ADDRESS
+    EEPROM.write(EEPROM_ADDRESS, SERIAL_LOGGER.parseInt());
+#endif
+    resetFunc();
+  }
+#endif
   TinyWireS_stop_check();
 }
 
@@ -166,14 +168,12 @@ void do_work()
       char f = buffer[4];
       switch (tolower(f)) {
         case 't': // temperature
-          if (SENSOR_EN) strcpy_P(buffer, ONE);
+         if (SENSOR_EN) ltoa(getTemperature(), buffer, 8);
           else strcpy_P(buffer, ZERO);
           SerialPrint("SENSOR_EN: ");
           break;
         case 'f': // i2c clock frequency
-          char w_clk[10];
-          ltoa(WIRE_CLOCK, w_clk, 10);
-          strcpy(buffer, w_clk);
+          ltoa(WIRE_CLOCK, buffer, 10);
           SerialPrint("WIRE_CLOCK: ");
           break;
         case 'c': // crc8 status
@@ -196,9 +196,9 @@ void do_work()
       buffer_length = strlen(buffer);
       working = false;
       jobdone = true;
+      if (WDT_EN) wdt_reset();
       return;
     }
-    
     do_job();
   }
   LedLow();
@@ -207,14 +207,14 @@ void do_work()
 void do_job()
 {
   unsigned long startTime = millis();
-  int job = work();
+  unsigned int job = work();
   unsigned long endTime = millis();
   unsigned int elapsedTime = endTime - startTime;
-  if (job<5) elapsedTime = job*(1<<2);
+  //if (job<5) elapsedTime = job*(1<<2);
   
   memset(buffer, 0, sizeof(buffer));
   char cstr[16];
-  
+
   // Job
   if (job == 0)
     strcpy(cstr,"#"); // re-request job
@@ -237,7 +237,7 @@ void do_job()
     if (UniqueID8[i] < 16) strcpy(buffer + strlen(buffer), "0");
     strcpy(buffer + strlen(buffer), cstr);
   }
-  
+
   #if CRC8_EN
   char gen_crc8[3];
   buffer[strlen(buffer)] = CHAR_DOT;
@@ -254,18 +254,16 @@ void do_job()
   working = false;
   jobdone = true;
   
-  #if WDT_EN
-  wdt_reset();
-  #endif
+  if (WDT_EN) wdt_reset();
 }
 
-int work()
+uint16_t work()
 {
   char delimiters[] = ",";
   char *lastHash = strtok(buffer, delimiters);
   char *newHash = strtok(NULL, delimiters);
   char *diff = strtok(NULL, delimiters);
-  
+
   #if CRC8_EN
   char *received_crc8 = strtok(NULL, delimiters);
   // do crc8 checks here
@@ -285,7 +283,7 @@ int work()
     return 0;
   }
   #endif
-
+  
   buffer_length = 0;
   buffer_position = 0;
   return work(lastHash, newHash, atoi(diff));
@@ -297,17 +295,17 @@ int work()
 //byte HTOI(char c) {return ((c<='9')?(c-'0'):((c<='f')?(c-'a'+10):(0)));}
 //byte TWO_HTOI(char h, char l) {return ((HTOI(h) << 4) + HTOI(l));}
 
-void HEX_TO_BYTE(char * address, char * hex, int len)
+void HEX_TO_BYTE(char * address, char * hex, uint8_t len)
 {
-  for (int i = 0; i < len; i++) address[i] = TWO_HTOI(hex[2 * i], hex[2 * i + 1]);
+  for (uint8_t i = 0; i < len; i++) address[i] = TWO_HTOI(hex[2 * i], hex[2 * i + 1]);
 }
 
 // DUCO-S1A hasher
-uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
+uint16_t work(char * lastblockhash, char * newblockhash, uint8_t difficulty)
 {
   if (difficulty > 655) return 0;
   HEX_TO_BYTE(newblockhash, newblockhash, HASH_BUFFER_SIZE);
-  for (int ducos1res = 0; ducos1res < difficulty * 100 + 1; ducos1res++)
+  for (uint16_t ducos1res = 0; ducos1res < difficulty * 100 + 1; ducos1res++)
   {
     Sha1.init();
     Sha1.print(lastblockhash);
@@ -316,10 +314,9 @@ uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
     {
       return ducos1res;
     }
-    #if WDT_EN
-    if (runEvery(2000))
-      wdt_reset();
-    #endif
+    if (WDT_EN) {
+      if (runEvery(2000)) wdt_reset();
+    }
   }
   return 0;
 }
@@ -329,7 +326,15 @@ uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
 // --------------------------------------------------------------------- //
 
 void initialize_i2c(void) {
-  address = DEV_INDEX + I2CS_START_ADDRESS;
+  address = ADDRESS_I2C;
+
+#ifdef EEPROM_ADDRESS
+  address = EEPROM.read(EEPROM_ADDRESS);
+  if (address == 0 || address > 127) {
+    address = ADDRESS_I2C;
+    EEPROM.write(EEPROM_ADDRESS, address);
+  }
+#endif
 
   SerialPrint("Wire begin ");
   SerialPrintln(address);
@@ -385,3 +390,79 @@ uint8_t crc8( uint8_t *addr, uint8_t len) {
    return crc;
 }
 #endif
+
+// Calibration of the temperature sensor has to be changed for your own ATtiny85
+// per tech note: http://www.atmel.com/Images/doc8108.pdf
+uint16_t chipTemp(uint16_t raw) {
+  return((raw - TEMPERATURE_OFFSET) / TEMPERATURE_COEFF);
+}
+
+// Common code for both sources of an ADC conversion
+uint16_t getADC() {
+  ADCSRA  |= _BV(ADSC);           // Start conversion
+  while((ADCSRA & _BV(ADSC)));    // Wait until conversion is finished
+  return ADC;                     // 10-bits
+}
+
+uint16_t getTemperature() {
+  uint8_t vccIndex, vccGuess, vccLevel;
+  uint16_t rawTemp=0, rawVcc;
+
+  // Measure temperature
+  ADCSRA |= _BV(ADEN);           // Enable AD and start conversion
+  ADMUX = 0xF | _BV( REFS1 );    // ADC4 (Temp Sensor) and Ref voltage = 1.1V;
+  delay(3);                      // Settling time min 1ms. give it 3
+
+  // acumulate ADC samples
+  for (uint8_t i=0; i<16; i++) {
+    rawTemp += getADC();
+  }
+  rawTemp = rawTemp >> 4;       // take median value
+  
+  ADCSRA &= ~(_BV(ADEN));        // disable ADC
+
+  rawVcc = getRawVcc();
+
+  // probably using 3.3V Vcc if less than 4V
+  if ((rawVcc * 10) < 40) { 
+    vccGuess = 33; 
+    vccLevel = 16; 
+  } 
+  // maybe 5V Vcc
+  else { 
+    vccGuess = 50; 
+    vccLevel = 33; 
+  } 
+  //index 0..13 for vcc 1.7 ... 3.0
+  //index 0..33 for vcc 1.7 ... 5.0
+  vccIndex = min(max(17,(uint8_t)(rawVcc * 10)),vccGuess) - 17;
+
+  // Temperature compensation using the chip voltage 
+  // with 3.0 V VCC is 1 lower than measured with 1.7 V VCC 
+  return chipTemp(rawTemp) + vccIndex / vccLevel;
+}
+
+uint16_t getRawVcc() {
+  uint16_t rawVcc = 0;
+  
+  // Measure chip voltage (Vcc)
+  ADCSRA |= _BV(ADEN);           // Enable ADC
+  ADMUX  = 0x0c | _BV(REFS2);    // Use Vcc as voltage reference,
+                                 // bandgap reference as ADC input
+  delay(3);                      // Settling time min 1 ms. give it 3
+
+  // accumulate ADC samples
+  for (uint8_t i=0; i<16; i++) {
+    rawVcc += getADC();
+  }
+  rawVcc = rawVcc >> 4;          // take median value
+  
+  ADCSRA &= ~(_BV(ADEN));        // disable ADC
+
+  // single ended conversion formula. ADC = Vin * 1024 / Vref, where Vin = 1.1V
+  // 1.1 * (1<<5) = 35.20. take 35. fp calculation is expensive
+  // divide using right shift
+  rawVcc = (1024 * 35 / rawVcc) >> 5;
+  
+  return rawVcc;
+}
