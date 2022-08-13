@@ -45,7 +45,7 @@ Finally, connect your I2C AVR miner and launch the software (e.g. `python3 ./AVR
 
 ## Version
 
-DuinoCoinI2C_RPI Version 3.18
+DuinoCoinI2C_RPI Version 3.3
 
 # Arduino - Slave
 
