@@ -322,7 +322,6 @@ donation_level = 0
 hashrate = 0
 config = ConfigParser()
 mining_start_time = time()
-worker_query_once = True
 worker_cfg_global = {"valid":False}
 
 if not path.exists(Settings.DATA_DIR):
@@ -1328,7 +1327,7 @@ def mine_avr(com, threadid, fastest_pool):
                             + f'RPI I2C AVR Miner {Settings.VER}'
                             + Settings.SEPARATOR
                             + str(rig_identifier)
-                            + str(port_num(com))
+                            #+ str(port_num(com))
                             + Settings.SEPARATOR
                             + str(result[2]))
 
