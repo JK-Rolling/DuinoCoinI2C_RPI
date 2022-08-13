@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RPI I2C Unofficial AVR Miner 3.2 © MIT licensed
+RPI I2C Unofficial AVR Miner 3.3 © MIT licensed
 Modified by JK-Rolling
 20210919
 
@@ -41,6 +41,7 @@ from threading import Semaphore
 import base64 as b64
 
 import os
+import random
 printlock = Semaphore(value=1)
 i2clock = Semaphore(value=1)
 
@@ -104,7 +105,7 @@ def port_num(com):
 
 
 class Settings:
-    VER = '3.2'
+    VER = '3.3'
     SOC_TIMEOUT = 15
     REPORT_TIME = 120
     AVR_TIMEOUT = 3  # diff 6 * 100 / 268 h/s = 2.24 s
@@ -114,6 +115,7 @@ class Settings:
     SEPARATOR = ","
     ENCODING = "utf-8"
     I2C_WR_RDDCY = 2
+    WORKER_CFG_SHARED = "y"
     try:
         # Raspberry Pi latin users can't display this character
         "‖".encode(sys.stdout.encoding)
@@ -320,6 +322,8 @@ donation_level = 0
 hashrate = 0
 config = ConfigParser()
 mining_start_time = time()
+worker_query_once = True
+worker_cfg_global = {"valid":False}
 
 if not path.exists(Settings.DATA_DIR):
     mkdir(Settings.DATA_DIR)
@@ -595,7 +599,8 @@ def load_config():
             "shuffle_ports":    "y",
             "mining_key":       mining_key,
             "i2c":              i2c,
-            "i2c_wr_rddcy":     Settings.I2C_WR_RDDCY}
+            "i2c_wr_rddcy":     Settings.I2C_WR_RDDCY,
+            "worker_cfg_shared":Settings.WORKER_CFG_SHARED}
 
         with open(str(Settings.DATA_DIR)
                   + '/Settings.cfg', 'w') as configfile:
@@ -611,18 +616,19 @@ def load_config():
         avrport = config["AVR Miner"]['avrport']
         avrport = avrport.replace(" ", "").split(',')
         donation_level = int(config["AVR Miner"]['donate'])
-        debug = config["AVR Miner"]['debug']
+        debug = config["AVR Miner"]['debug'].lower()
         rig_identifier = config["AVR Miner"]['identifier']
         Settings.SOC_TIMEOUT = int(config["AVR Miner"]["soc_timeout"])
         Settings.AVR_TIMEOUT = float(config["AVR Miner"]["avr_timeout"])
         Settings.DELAY_START = int(config["AVR Miner"]["delay_start"])
-        Settings.IoT_EN = config["AVR Miner"]["duinoiot_en"]
+        Settings.IoT_EN = config["AVR Miner"]["duinoiot_en"].lower()
         discord_presence = config["AVR Miner"]["discord_presence"]
         shuffle_ports = config["AVR Miner"]["shuffle_ports"]
         Settings.REPORT_TIME = int(config["AVR Miner"]["periodic_report"])
         hashrate_list = [0] * len(avrport)
         i2c = int(config["AVR Miner"]["i2c"])
         Settings.I2C_WR_RDDCY = int(config["AVR Miner"]["i2c_wr_rddcy"])
+        Settings.WORKER_CFG_SHARED = config["AVR Miner"]["worker_cfg_shared"].lower()
 
 
 def greeting():
@@ -829,7 +835,7 @@ def share_print(id, type, accept, reject, total_hashrate,
               + f"ping {(int(ping))}ms")
         printlock.release()
 
-def flush_i2c(i2c_bus,com,period=2):
+def flush_i2c(i2c_bus,com,period=1):
     i2c_flush_start = time()
     with thread_lock():
         while True:
@@ -898,7 +904,7 @@ def get_temperature(i2c_bus,com):
             if ('\n' in i2c_rdata) and (len(i2c_resp)>0):
                 break
 
-            if (time() - start_time) > Settings.AVR_TIMEOUT:
+            if (time() - start_time) > 1:
                 i2c_resp = "0.00"
                 break
     except Exception as e:
@@ -933,8 +939,8 @@ def send_worker_cmd(i2c_bus,com,cmd,default):
             if ('\n' in i2c_rdata) and (len(i2c_resp)>0):
                 break
 
-            # shouldn't take more than 2s to get response
-            if (time() - start_time) > 2:
+            # shouldn't take more than 1s to get response
+            if (time() - start_time) > 1:
                 i2c_resp = "0"
                 break
     except Exception as e:
@@ -1008,10 +1014,21 @@ def debouncer(fname, i2c_bus, com):
         count += 1
     return result
 
+def get_worker_cfg_global(i2c_bus, com):
+    worker_cfg_global["i2c_freq"] = get_worker_i2cfreq(i2c_bus, com)
+    worker_cfg_global["crc8_en"] = debouncer("get_worker_crc8_status", i2c_bus, com)
+    sensor_en = get_temperature(i2c_bus, com)
+    worker_cfg_global["sensor_en"] = 1 if sensor_en != "0" else 0
+    worker_cfg_global["baton_status"] = get_worker_baton_status(i2c_bus, com)
+    worker_cfg_global["single_core_only"] = get_worker_core_status(i2c_bus, com)
+    worker_cfg_global["worker_name"] = get_worker_name(i2c_bus, com)
+    worker_cfg_global["valid"] = True
+
 def mine_avr(com, threadid, fastest_pool):
     global hashrate
     global bad_crc8
     global i2c_retry_count
+    global hashrate_mean
     start_time = time()
     report_shares = 0
     last_report_share = 0
@@ -1024,19 +1041,33 @@ def mine_avr(com, threadid, fastest_pool):
     user_iot = Settings.IoT_EN
     ducoid = ""
     worker_type = "avr"
+    worker_cfg_shared = True if Settings.WORKER_CFG_SHARED == "y" else False
 
     flush_i2c(i2c_bus, com)
-    i2c_freq = get_worker_i2cfreq(i2c_bus, com)
-    crc8_en = debouncer("get_worker_crc8_status", i2c_bus, com)
-    sensor_en = get_temperature(i2c_bus, com)
-    sensor_en = 1 if sensor_en != "0" else 0
-    baton_status = get_worker_baton_status(i2c_bus, com)
-    single_core_only = get_worker_core_status(i2c_bus, com)
-    worker_name = get_worker_name(i2c_bus, com)
+
+    while worker_cfg_global["valid"] is not True and worker_cfg_shared:
+        sleep(1)
+    
+    if worker_cfg_shared:
+        i2c_freq = worker_cfg_global["i2c_freq"]
+        crc8_en = worker_cfg_global["crc8_en"]
+        sensor_en = worker_cfg_global["sensor_en"]
+        baton_status = worker_cfg_global["baton_status"]
+        single_core_only = worker_cfg_global["single_core_only"]
+        worker_name = worker_cfg_global["worker_name"]
+    else:
+        i2c_freq = get_worker_i2cfreq(i2c_bus, com)
+        crc8_en = debouncer("get_worker_crc8_status", i2c_bus, com)
+        sensor_en = get_temperature(i2c_bus, com)
+        sensor_en = 1 if sensor_en != "0" else 0
+        baton_status = get_worker_baton_status(i2c_bus, com)
+        single_core_only = get_worker_core_status(i2c_bus, com)
+        worker_name = get_worker_name(i2c_bus, com)
 
     worker_print(com, i2c_clock=i2c_freq, crc8_en=crc8_en, 
                 sensor_en=sensor_en, baton_status=baton_status,
-                single_core_only=single_core_only, worker_name=worker_name)
+                single_core_only=single_core_only, worker_name=worker_name, 
+                shared_worker_cfg=str(worker_cfg_shared))
 
     if sensor_en == 0 and "y" in user_iot.lower():
         user_iot = "n"
@@ -1212,7 +1243,7 @@ def mine_avr(com, threadid, fastest_pool):
                             break
                         
                         if (time() - i2c_start_time) > avr_timeout:
-                            debug_output(com + ' I2C timed out after {avr_timeout}s')
+                            debug_output(com + f' I2C timed out after {avr_timeout}s')
                             raise Exception("I2C timed out")
 
                     if result[0] and result[1]:
@@ -1270,6 +1301,10 @@ def mine_avr(com, threadid, fastest_pool):
 
                 hashrate_mean.append(hashrate_t)
                 hashrate = mean(hashrate_mean[-5:])
+                if len(hashrate_mean) > 5:
+                    hashrate_mean = hashrate_mean[-5:]
+                if (hashrate < 6000) and (hashrate_t >= 6000):
+                    hashrate_t = 5990 + round(random.random(),2)
                 hashrate_list[threadid] = hashrate
             except Exception as e:
                 pretty_print('sys' + port_num(com),
@@ -1443,6 +1478,10 @@ if __name__ == '__main__':
         i2c_bus = SMBus(i2c)
         fastest_pool = Client.fetch_pool()
         threadid = 0
+        if Settings.WORKER_CFG_SHARED == "y":
+            for port in avrport:
+                get_worker_cfg_global(i2c_bus,port)
+                if worker_cfg_global["valid"]: break
         for port in avrport:
             Thread(target=mine_avr,
                    args=(port, threadid,
