@@ -119,6 +119,31 @@ to get smallest possible sketch size with hacking, use the above settings and ha
 #define TWI_TX_BUFFER_SIZE (4)
 ```
 
+# Adafruit Trinket ATtiny85 - Slave
+
+Similar to ATtiny85, but Trinket came with bootloader which leave only 5310 Bytes for sketch. Use `DuinoCoin_Tiny_Slave_trinket` sketch to start mining. Estimated hashrate at 258 H/s, consuming 97% of available program space (5146 Bytes).
+
+VBAT+ pin on the Trinket 5V will accept 3.3V input just fine, so LLC not required if the master is using 3.3V logic level.
+
+## Removing bootloader
+
+You may use Arduino Nano/Uno or ATtiny programmer to remove the bootloader to regain full 8KB storage, load `DuinoCoin_ATTiny_Slave` instead to get 267 H/s (+3.5%)
+
+Load File > Examples > ArduinoISP into Uno/Nano and connect as below. Open `DuinoCoin_ATTiny_Slave`, choose the Uno/Nano from Tools > Port, choose Tools > Programmer > Arduino as ISP, finally, Sketch > Upload Using Programmer
+
+| Trinket | | Uno/Nano |
+| :----: | :-----: | :-----: |
+|VBAT+ | <---> | 5V |
+|GND|<--->|GND|
+|RST|<--->|#10|
+|#0|<--->|#11|
+|#1|<--->|#12|
+|#2|<--->|#13|
+
+## Repair bootloader
+
+Follow the wiring in `Removing bootloader`, download the [trinketloader_2015-06-09.zip](https://github.com/JK-Rolling/DuinoCoinI2C_RPI/raw/main/DuinoCoin_Tiny_Slave_trinket/trinketloader_2015-06-09.zip), extract all files, load the `trinketloader` into Uno/Nano, open Serial console at 9600 baudrate, hit `G` and enter. bootloader should be uploaded into the Trinket and once again, sketch can be uploaded into Trinket via USB
+
 # Raspberry Pi Pico - Slave
 
 Use Pico dual core code for Raspberry Pi Pico. Logic Level Converter (LLC) is not required as both RPi and Pico operates at 3.3V.
