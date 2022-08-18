@@ -16,6 +16,7 @@
 #define CRC8_EN                     true
 #define WDT_EN                      true
 #define SENSOR_EN                   true          // use ATTiny85 internal temperature sensor
+#define LED_EN                      false         // brightness controllable on pin 1
 /****************** USER MODIFICATION END ******************/
 /*---------------------------------------------------------*/
 /****************** FINE TUNING START **********************/
@@ -24,14 +25,13 @@
 #define WIRE_CLOCK                  100000
 #define TEMPERATURE_OFFSET          287           // calibrate ADC here
 #define TEMPERATURE_COEFF           1             // calibrate ADC further
+#define LED_PIN                     1
+#define LED_BRIGHTNESS              255           // 1-255
 /****************** FINE TUNING END ************************/
 //#define EEPROM_ADDRESS              0
 #if defined(ARDUINO_AVR_UNO) | defined(ARDUINO_AVR_PRO)
 #define SERIAL_LOGGER Serial
-#define LED LED_BUILTIN
 #endif
-// user assign led pin if needed. consumes 214 bytes
-//#define LED 3
 
 // ATtiny85 - http://drazzy.com/package_drazzy.com_index.json
 // SCL - PB2 - 2
@@ -47,10 +47,10 @@
 #define SerialPrintln(x)
 #endif
 
-#ifdef LED
-#define LedBegin()                DDRB |= (1 << LED);
-#define LedHigh()                 PORTB |= (1 << LED);
-#define LedLow()                  PORTB &= ~(1 << LED);
+#if LED_EN
+#define LedBegin()                DDRB |= (1 << LED_PIN);
+#define LedHigh()                 analogWrite(LED_PIN, LED_BRIGHTNESS);
+#define LedLow()                  analogWrite(LED_PIN, 0);
 #define LedBlink()                LedHigh(); delay(100); LedLow(); delay(100);
 #else
 #define LedBegin()
