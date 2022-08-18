@@ -1,24 +1,7 @@
 /*
   DoinoCoin_Tiny_Slave.ino
-  created 07 08 2021
-  by Luiz H. Cassettari
-  modified by JK Rolling
-  
-  v3.25-1
-  * Added internal temperature report
-  v3.18-1
-  * Added worker info report support
-  * support i2c data redundancy
-  v3.0-1
-  * Added DuinoCoinSpeed.h
-  * placed Sha1Class into stack to save more space
-  v2.7.5-3
-  * added -Ofast option
-  v2.7.5-2
-  * added HASHRATE_FORCE
-  v2.7.5-1
-  * added CRC8 checks
-  * added WDT to auto reset after 8s of inactivity
+  adapted from Luiz H. Cassettari
+  by JK Rolling
 */
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
 #include <Wire.h>
@@ -28,7 +11,7 @@
 #define DEV_INDEX                   0
 #define I2CS_START_ADDRESS          8
 #define I2CS_FIND_ADDR              false
-#define WDT_EN                      false
+#define WDT_EN                      false        // do not turn on if using old bootloader
 #define CRC8_EN                     true
 #define LED_EN                      true
 #define SENSOR_EN                   true
@@ -36,6 +19,7 @@
 /*---------------------------------------------------------*/
 /****************** FINE TUNING START **********************/
 #define LED_PIN                     LED_BUILTIN
+#define LED_BRIGHTNESS              255          // 1-255
 #define BLINK_SHARE_FOUND           1
 #define BLINK_SETUP_COMPLETE        2
 #define BLINK_BAD_CRC               3
@@ -523,7 +507,7 @@ void Blink(uint8_t count, uint8_t pin = LED_BUILTIN) {
   uint8_t state = LOW;
 
   for (int x=0; x<(count << 1); ++x) {
-    digitalWrite(pin, state ^= HIGH);
+    analogWrite(pin, state ^= LED_BRIGHTNESS);
     delay(50);
   }
 }
