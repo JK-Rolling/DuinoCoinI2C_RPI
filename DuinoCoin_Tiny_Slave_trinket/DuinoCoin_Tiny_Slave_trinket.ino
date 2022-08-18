@@ -17,6 +17,7 @@
 #define CRC8_EN                     true
 #define WDT_EN                      true
 #define SENSOR_EN                   false          // use ATTiny85 internal temperature sensor (+346 Bytes)
+#define LED_EN                      true
 /****************** USER MODIFICATION END ******************/
 /*---------------------------------------------------------*/
 /****************** FINE TUNING START **********************/
@@ -25,13 +26,13 @@
 #define WIRE_CLOCK                  100000
 #define TEMPERATURE_OFFSET          299           // calibrate ADC here
 #define TEMPERATURE_COEFF           1             // calibrate ADC further
+#define LED_PIN                     LED_BUILTIN
+#define LED_BRIGHTNESS              255           // 1-255
 /****************** FINE TUNING END ************************/
 //#define EEPROM_ADDRESS              0
 #if defined(ARDUINO_AVR_UNO) | defined(ARDUINO_AVR_PRO)
 #define SERIAL_LOGGER Serial
 #endif
-// user assign led pin if needed
-#define LED LED_BUILTIN
 
 // ATtiny85 - https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
 // SCL - PB2 - 2
@@ -47,10 +48,15 @@
 #define SerialPrintln(x)
 #endif
 
-#ifdef LED
-#define LedBegin()                DDRB |= (1 << LED);
-#define LedHigh()                 PORTB |= (1 << LED);
-#define LedLow()                  PORTB &= ~(1 << LED);
+#if LED_EN
+#define LedBegin()                DDRB |= (1 << LED_PIN);
+#if LED_BRIGHTNESS == 255
+#define LedHigh()                 PORTB |= (1 << LED_PIN);
+#define LedLow()                  PORTB &= ~(1 << LED_PIN);
+#else
+#define LedHigh()                 analogWrite(LED_PIN, LED_BRIGHTNESS);
+#define LedLow()                  analogWrite(LED_PIN, 0);
+#endif
 #define LedBlink()                LedHigh(); delay(100); LedLow(); delay(100);
 #else
 #define LedBegin()
