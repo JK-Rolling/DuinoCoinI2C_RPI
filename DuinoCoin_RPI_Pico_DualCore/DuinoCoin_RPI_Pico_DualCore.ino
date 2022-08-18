@@ -43,6 +43,7 @@ extern "C" {
 /*---------------------------------------------------------*/
 /****************** FINE TUNING START **********************/
 #define LED_PIN                     LED_BUILTIN
+#define LED_BRIGHTNESS              255                 // 1-255
 #define BLINK_SHARE_FOUND           1
 #define BLINK_SETUP_COMPLETE        2
 #define BLINK_BAD_CRC               3
