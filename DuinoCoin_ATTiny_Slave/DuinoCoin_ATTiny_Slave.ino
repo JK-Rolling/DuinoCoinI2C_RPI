@@ -49,8 +49,13 @@
 
 #if LED_EN
 #define LedBegin()                DDRB |= (1 << LED_PIN);
+#if LED_BRIGHTNESS == 255
+#define LedHigh()                 PORTB |= (1 << LED_PIN);
+#define LedLow()                  PORTB &= ~(1 << LED_PIN);
+#else
 #define LedHigh()                 analogWrite(LED_PIN, LED_BRIGHTNESS);
 #define LedLow()                  analogWrite(LED_PIN, 0);
+#endif
 #define LedBlink()                LedHigh(); delay(100); LedLow(); delay(100);
 #else
 #define LedBegin()
