@@ -105,7 +105,7 @@ void Blink(uint8_t count, uint8_t pin = LED_BUILTIN) {
   uint8_t state = LOW;
 
   for (int x=0; x<(count << 1); ++x) {
-    digitalWrite(pin, state ^= HIGH);
+    analogWrite(pin, state ^= LED_BRIGHTNESS);
     sleep_ms(50);
   }
 }
