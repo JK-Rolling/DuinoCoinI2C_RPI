@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-RPI I2C Unofficial AVR Miner 3.3 © MIT licensed
+RPI I2C Unofficial AVR Miner 3.4 © MIT licensed
 Modified by JK-Rolling
 20210919
 
 Full credit belong to
 https://duinocoin.com
 https://github.com/revoxhere/duino-coin
-Duino-Coin Team & Community 2019-2022
+Duino-Coin Team & Community 2019-current
 """
 
 from os import _exit, mkdir
@@ -105,7 +105,7 @@ def port_num(com):
 
 
 class Settings:
-    VER = '3.3'
+    VER = '3.4'
     SOC_TIMEOUT = 15
     REPORT_TIME = 120
     AVR_TIMEOUT = 3  # diff 6 * 100 / 268 h/s = 2.24 s
