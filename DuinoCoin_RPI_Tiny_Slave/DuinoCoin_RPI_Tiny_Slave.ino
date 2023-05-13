@@ -5,7 +5,7 @@
 */
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
 #include <Wire.h>
-#include "sha1.h"
+#include "duco_hash.h"
 
 /****************** USER MODIFICATION START ****************/
 #define DEV_INDEX                   0
@@ -93,7 +93,7 @@ void setup() {
   
   #if WDT_EN
     wdt_disable();
-    wdt_enable(WDTO_8S);
+    wdt_enable(WDTO_4S);
   #endif
 
   initialize_i2c();
@@ -308,24 +308,26 @@ void HEX_TO_BYTE(char * address, char * hex, int len)
 // DUCO-S1A hasher
 uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
 {
-  Sha1Class Sha1_base;
   if (difficulty > 655) return 0;
   HEX_TO_BYTE(newblockhash, newblockhash, HASH_BUFFER_SIZE);
-  Sha1_base.init();
-  Sha1_base.print(lastblockhash);
-  for (int ducos1res = 0; ducos1res < difficulty * 100 + 1; ducos1res++)
-  {
-    Sha1 = Sha1_base;
-    Sha1.print(ducos1res);
-    if (memcmp(Sha1.result(), newblockhash, HASH_BUFFER_SIZE) == 0)
-    {
-      return ducos1res;
+  static duco_hash_state_t hash;
+  duco_hash_init(&hash, lastblockhash);
+
+  char nonceStr[10 + 1];
+  difficulty *= difficulty + 1;
+  for (int nonce = 0; nonce < difficulty; nonce++) {
+    ultoa(nonce, nonceStr, 10);
+
+    uint8_t const * hash_bytes = duco_hash_try_nonce(&hash, nonceStr);
+    if (memcmp(hash_bytes, newblockhash, HASH_BUFFER_SIZE) == 0) {
+      return nonce;
     }
     #if WDT_EN
     if (runEvery(2000))
       wdt_reset();
     #endif
   }
+
   return 0;
 }
 
