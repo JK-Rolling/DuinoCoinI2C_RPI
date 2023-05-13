@@ -21,7 +21,7 @@
 
 // user to change SPEED preference
 #ifndef SPEED
-  #define SPEED 2
+  #define SPEED 4
 #endif
 
 // 0 -O0    <- reduce compilation time
@@ -49,12 +49,12 @@
 #endif
 
 /*
- * Tested on Arduino Nano 328p
- * 0 --> 145H/s
- * 1 --> 241H/s
- * 2 --> 268H/s (fastest)
- * 3 --> 265H/s
- * 4 --> 265H/s
- * g --> 145H/s
+ * Tested on Arduino UNO
+ * 0 --> 253H/s
+ * 1 --> 308H/s
+ * 2 --> 321H/s
+ * 3 --> 335H/s
+ * 4 --> 335H/s
+ * g --> 253H/s
  * 
  */
