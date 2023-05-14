@@ -4,16 +4,15 @@
   by JK Rolling
 */
 
-#pragma GCC optimize ("-O2")
 #include <ArduinoUniqueID.h>  // https://github.com/ricaun/ArduinoUniqueID
 #include <EEPROM.h>
 #include <Wire.h>
 #include <avr/wdt.h>
-#include "sha1.h"
+#include "duco_hash.h"
 
 /****************** USER MODIFICATION START ****************/
 #define ADDRESS_I2C                 8             // manual I2C address assignment
-#define CRC8_EN                     true
+#define CRC8_EN                     false
 #define WDT_EN                      true
 #define SENSOR_EN                   true          // use ATTiny85 internal temperature sensor
 #define LED_EN                      false         // brightness controllable on pin 1
@@ -26,7 +25,7 @@
 #define TEMPERATURE_OFFSET          287           // calibrate ADC here
 #define TEMPERATURE_COEFF           1             // calibrate ADC further
 #define LED_PIN                     1
-#define LED_BRIGHTNESS              255           // 1-255
+#define LED_BRIGHTNESS              8             // 1-255
 /****************** FINE TUNING END ************************/
 //#define EEPROM_ADDRESS              0
 #if defined(ARDUINO_AVR_UNO) | defined(ARDUINO_AVR_PRO)
@@ -102,7 +101,7 @@ void setup() {
   SerialBegin();
   if (WDT_EN) {
     wdt_disable();
-    wdt_enable(WDTO_8S);
+    wdt_enable(WDTO_4S);
   }
   initialize_i2c();
   LedBegin();
@@ -213,7 +212,7 @@ void do_job()
   unsigned int job = work();
   unsigned long endTime = millis();
   unsigned int elapsedTime = endTime - startTime;
-  //if (job<5) elapsedTime = job*(1<<2);
+  if (job<5) elapsedTime = job*(1<<2);
   
   memset(buffer, 0, sizeof(buffer));
   char cstr[16];
@@ -308,19 +307,21 @@ uint16_t work(char * lastblockhash, char * newblockhash, uint8_t difficulty)
 {
   if (difficulty > 655) return 0;
   HEX_TO_BYTE(newblockhash, newblockhash, HASH_BUFFER_SIZE);
-  for (uint16_t ducos1res = 0; ducos1res < difficulty * 100 + 1; ducos1res++)
-  {
-    Sha1.init();
-    Sha1.print(lastblockhash);
-    Sha1.print(ducos1res);
-    if (memcmp(Sha1.result(), newblockhash, HASH_BUFFER_SIZE) == 0)
-    {
-      return ducos1res;
+  static duco_hash_state_t hash;
+  duco_hash_init(&hash, lastblockhash);
+
+  char nonceStr[10 + 1];
+  for (uint16_t nonce = 0; nonce < difficulty*100+1; nonce++) {
+    ultoa(nonce, nonceStr, 10);
+    uint8_t const * hash_bytes = duco_hash_try_nonce(&hash, nonceStr);
+    if (memcmp(hash_bytes, newblockhash, HASH_BUFFER_SIZE) == 0) {
+      return nonce;
     }
     if (WDT_EN) {
       if (runEvery(2000)) wdt_reset();
     }
   }
+
   return 0;
 }
 
