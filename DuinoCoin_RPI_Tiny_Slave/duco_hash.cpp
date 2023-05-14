@@ -1,7 +1,5 @@
 #include "duco_hash.h"
 
-#pragma GCC optimize ("-Ofast")
-
 #define sha1_rotl(bits,word)     (((word) << (bits)) | ((word) >> (32 - (bits))))
 
 void duco_hash_block(duco_hash_state_t * hasher) {
