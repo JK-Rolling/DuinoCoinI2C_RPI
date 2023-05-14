@@ -23,7 +23,7 @@
 #define BLINK_SHARE_FOUND           1
 #define BLINK_SETUP_COMPLETE        2
 #define BLINK_BAD_CRC               3
-#define SERIAL_LOGGER               Serial
+//#define SERIAL_LOGGER               Serial
 #define I2CS_MAX                    32
 #define WORKER_NAME                 "atmega328p"
 #define WIRE_CLOCK                  100000
@@ -314,8 +314,7 @@ uint32_t work(char * lastblockhash, char * newblockhash, int difficulty)
   duco_hash_init(&hash, lastblockhash);
 
   char nonceStr[10 + 1];
-  difficulty *= difficulty + 1;
-  for (int nonce = 0; nonce < difficulty; nonce++) {
+  for (int nonce = 0; nonce < difficulty*100+1; nonce++) {
     ultoa(nonce, nonceStr, 10);
 
     uint8_t const * hash_bytes = duco_hash_try_nonce(&hash, nonceStr);
