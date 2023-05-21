@@ -12,9 +12,9 @@
 
 /****************** USER MODIFICATION START ****************/
 #define ADDRESS_I2C                 8             // manual I2C address assignment
-#define CRC8_EN                     false
+#define CRC8_EN                     true
 #define WDT_EN                      true
-#define SENSOR_EN                   true          // use ATTiny85 internal temperature sensor
+#define SENSOR_EN                   false         // use ATTiny85 internal temperature sensor
 #define LED_EN                      false         // brightness controllable on pin 1
 /****************** USER MODIFICATION END ******************/
 /*---------------------------------------------------------*/
@@ -265,7 +265,7 @@ uint16_t work()
   char *lastHash = strtok(buffer, delimiters);
   char *newHash = strtok(NULL, delimiters);
   char *diff = strtok(NULL, delimiters);
-
+/*
   #if CRC8_EN
   char *received_crc8 = strtok(NULL, delimiters);
   // do crc8 checks here
@@ -285,7 +285,7 @@ uint16_t work()
     return 0;
   }
   #endif
-  
+*/
   buffer_length = 0;
   buffer_position = 0;
   return work(lastHash, newHash, atoi(diff));
