@@ -19,7 +19,7 @@
 /****************** USER MODIFICATION END ******************/
 /*---------------------------------------------------------*/
 /****************** FINE TUNING START **********************/
-#define WORKER_NAME                 "attiny85"
+#define WORKER_NAME                 "t85"
 #define WIRE_MAX                    32
 #define WIRE_CLOCK                  100000
 #define TEMPERATURE_OFFSET          287           // calibrate ADC here
@@ -63,7 +63,11 @@
 #define LedBlink()
 #endif
 
-#define BUFFER_MAX 88
+#if CRC8_EN
+#define BUFFER_MAX 89
+#else
+#define BUFFER_MAX 86
+#endif
 #define HASH_BUFFER_SIZE 20
 #define CHAR_END '\n'
 #define CHAR_DOT ','
@@ -261,31 +265,28 @@ void do_job()
 
 uint16_t work()
 {
-  char delimiters[] = ",";
-  char *lastHash = strtok(buffer, delimiters);
-  char *newHash = strtok(NULL, delimiters);
-  char *diff = strtok(NULL, delimiters);
-/*
+  // calculate CRC8
   #if CRC8_EN
-  char *received_crc8 = strtok(NULL, delimiters);
-  // do crc8 checks here
-  uint8_t job_length = 3; // 3 commas
-  job_length += strlen(lastHash) + strlen(newHash) + strlen(diff);
-  char buffer_temp[job_length+1];
-  strcpy(buffer_temp, lastHash);
-  strcat(buffer_temp, delimiters);
-  strcat(buffer_temp, newHash);
-  strcat(buffer_temp, delimiters);
-  strcat(buffer_temp, diff);
-  strcat(buffer_temp, delimiters);
-  
-  if (atoi(received_crc8) != crc8((uint8_t *)buffer_temp,job_length)) {
-    // data corrupted
-    SerialPrintln("CRC8 mismatched. Abort..");
+  char *delim_ptr = strchr(buffer, CHAR_DOT);
+  delim_ptr = strchr(delim_ptr+1, CHAR_DOT);
+  uint8_t job_length = strchr(delim_ptr+1, CHAR_DOT) - &buffer[0] + 1;
+  uint8_t calc_crc8 = crc8((uint8_t *)buffer, job_length);
+  #endif
+
+  // tokenize
+  const char *delim = ",";
+  char *lastHash = strtok(buffer, delim);
+  char *newHash = strtok(NULL, delim);
+  char *diff = strtok(NULL, delim);
+
+  // validate integrity
+  #if CRC8_EN
+  char *rx_crc8 = strtok(NULL, delim);
+  if (calc_crc8 != atoi(rx_crc8)) {
     return 0;
   }
   #endif
-*/
+  
   buffer_length = 0;
   buffer_position = 0;
   return work(lastHash, newHash, atoi(diff));
@@ -309,7 +310,6 @@ uint16_t work(char * lastblockhash, char * newblockhash, uint8_t difficulty)
   HEX_TO_BYTE(newblockhash, newblockhash, HASH_BUFFER_SIZE);
   static duco_hash_state_t hash;
   duco_hash_init(&hash, lastblockhash);
-
   char nonceStr[10 + 1];
   for (uint16_t nonce = 0; nonce < difficulty*100+1; nonce++) {
     ultoa(nonce, nonceStr, 10);
@@ -358,6 +358,7 @@ void onReceiveJob(uint8_t howMany) {
   if (c == CHAR_END || c == '$') {
     working = true;
   }
+  // flush remaining data
   while (Wire.available()) {
     Wire.read();
   }
