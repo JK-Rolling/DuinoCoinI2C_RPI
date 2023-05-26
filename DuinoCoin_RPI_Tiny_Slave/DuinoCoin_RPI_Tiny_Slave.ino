@@ -11,7 +11,7 @@
 #define DEV_INDEX                   0
 #define I2CS_START_ADDRESS          8
 #define I2CS_FIND_ADDR              false
-#define WDT_EN                      false        // do not turn on if using old bootloader
+#define WDT_EN                      false        // recommended 'true', but do not turn on if using old bootloader
 #define CRC8_EN                     true
 #define LED_EN                      true
 #define SENSOR_EN                   true
@@ -74,7 +74,7 @@ static bool jobdone;
 static double temperature_filter;
 
 void(* resetFunc) (void) = 0;//declare reset function at address 0
-void Blink(uint8_t count, uint8_t pin);
+void Blink(uint8_t count, uint8_t pin, uint8_t dly);
 
 // --------------------------------------------------------------------- //
 // setup
@@ -98,7 +98,7 @@ void setup() {
 
   initialize_i2c();
 
-  Blink(BLINK_SETUP_COMPLETE, LED_PIN);
+  Blink(BLINK_SETUP_COMPLETE, LED_PIN, 50);
   SerialPrintln("Startup Done!");
 }
 
@@ -264,25 +264,24 @@ void do_job()
 
 int work()
 {
-  char delimiters[] = ",";
-  char *lastHash = strtok(buffer, delimiters);
-  char *newHash = strtok(NULL, delimiters);
-  char *diff = strtok(NULL, delimiters);
-
-  #if CRC8_EN
-  char *received_crc8 = strtok(NULL, delimiters);
-  // do crc8 checks here
-  uint8_t job_length = 3; // 3 commas
-  job_length += strlen(lastHash) + strlen(newHash) + strlen(diff);
-  char buffer_temp[job_length+1];
-  strcpy(buffer_temp, lastHash);
-  strcat(buffer_temp, delimiters);
-  strcat(buffer_temp, newHash);
-  strcat(buffer_temp, delimiters);
-  strcat(buffer_temp, diff);
-  strcat(buffer_temp, delimiters);
   
-  if (atoi(received_crc8) != crc8((uint8_t *)buffer_temp,job_length)) {
+  #if CRC8_EN
+  char *delim_ptr = strchr(buffer, CHAR_DOT);
+  delim_ptr = strchr(delim_ptr+1, CHAR_DOT);
+  uint8_t job_length = strchr(delim_ptr+1, CHAR_DOT) - &buffer[0] + 1;
+  uint8_t calc_crc8 = crc8((uint8_t *)buffer, job_length);
+  #endif
+
+  // tokenize
+  const char *delim = ",";
+  char *lastHash = strtok(buffer, delim);
+  char *newHash = strtok(NULL, delim);
+  char *diff = strtok(NULL, delim);
+
+  // validate integrity
+  #if CRC8_EN
+  char *rx_crc8 = strtok(NULL, delim);
+  if (calc_crc8 != atoi(rx_crc8)) {
     // data corrupted
     SerialPrintln("CRC8 mismatched. Abort..");
     return 0;
@@ -503,13 +502,13 @@ void led_off() {
   digitalWrite(LED_PIN, LOW);
 }
 
-void Blink(uint8_t count, uint8_t pin = LED_BUILTIN) {
+void Blink(uint8_t count, uint8_t pin = LED_BUILTIN, uint8_t dly = 50) {
   if (!LED_EN) return;
   uint8_t state = LOW;
 
   for (int x=0; x<(count << 1); ++x) {
     analogWrite(pin, state ^= LED_BRIGHTNESS);
-    delay(50);
+    delay(dly);
   }
 }
 
