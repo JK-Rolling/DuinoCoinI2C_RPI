@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RPI I2C Unofficial AVR Miner 3.4 © MIT licensed
+RPI I2C Unofficial AVR Miner 3.5 © MIT licensed
 Modified by JK-Rolling
 20210919
 
@@ -105,11 +105,11 @@ def port_num(com):
 
 
 class Settings:
-    VER = '3.4'
+    VER = '3.5'
     SOC_TIMEOUT = 15
     REPORT_TIME = 120
-    AVR_TIMEOUT = 3  # diff 6 * 100 / 268 h/s = 2.24 s
-    DELAY_START = 30  # 30 seconds start delay between worker to help kolka sync efficiency drop
+    AVR_TIMEOUT = 3  # diff 8 * 100 / 340 h/s = 2.35 s
+    DELAY_START = 5  # 5 seconds start delay between worker to help kolka sync efficiency drop
     IoT_EN = "n"
     DATA_DIR = "Duino-Coin AVR Miner " + str(VER)
     SEPARATOR = ","
@@ -361,6 +361,8 @@ try:
             lang = 'german'
         elif locale.startswith('fr'):
             lang = 'french'
+        elif locale.startswith('jp'):
+            lang = 'japanese'
         elif locale.startswith('tr'):
             lang = 'turkish'
         elif locale.startswith('it'):
@@ -381,6 +383,8 @@ try:
             lang = "indonesian"
         elif locale.startswith("cz"):
             lang = "czech"
+        elif locale.startswith("fi"):
+            lang = "finnish"
         else:
             lang = 'english'
     else:
@@ -529,11 +533,25 @@ def load_config():
                 + 'i2cdetect has found I2C addresses above')
                 
         avrport = ''
+        rig_identifier = ''
         while True:
             current_port = input(
                 Style.RESET_ALL + Fore.YELLOW
                 + 'Enter your I2C slave address (e.g. 8): '
                 + Fore.RESET + Style.BRIGHT)
+                
+            confirm_identifier = input(
+                Style.RESET_ALL + Fore.YELLOW
+                + get_string('ask_rig_identifier')
+                + Fore.RESET + Style.BRIGHT)
+            if confirm_identifier == 'y' or confirm_identifier == 'Y':
+                current_identifier = input(
+                    Style.RESET_ALL + Fore.YELLOW
+                    + get_string('ask_rig_name')
+                    + Fore.RESET + Style.BRIGHT)
+                rig_identifier += current_identifier
+            else:
+                rig_identifier += "None"
 
             avrport += current_port
             confirmation = input(
@@ -543,6 +561,7 @@ def load_config():
 
             if confirmation == 'y' or confirmation == 'Y':
                 avrport += ','
+                rig_identifier += ','
             else:
                 break
                 
@@ -552,19 +571,7 @@ def load_config():
             + Fore.RESET + Style.BRIGHT)
         Settings.IoT_EN = Settings.IoT_EN.lower()
         if len(Settings.IoT_EN) == 0: Settings.IoT_EN = "y"
-        elif Settings.IoT_EN != "y": Settings.IoT_EN = "n"
-
-        rig_identifier = input(
-            Style.RESET_ALL + Fore.YELLOW
-            + get_string('ask_rig_identifier')
-            + Fore.RESET + Style.BRIGHT)
-        if rig_identifier == 'y' or rig_identifier == 'Y':
-            rig_identifier = input(
-                Style.RESET_ALL + Fore.YELLOW
-                + get_string('ask_rig_name')
-                + Fore.RESET + Style.BRIGHT)
-        else:
-            rig_identifier = 'None'
+        elif Settings.IoT_EN.lower() != "y": Settings.IoT_EN = "n"
 
         donation_level = '0'
         if osname == 'nt' or osname == 'posix':
@@ -606,6 +613,7 @@ def load_config():
             config.write(configfile)
 
         avrport = avrport.split(',')
+        rig_identifier = rig_identifier.split(',')
         print(Style.RESET_ALL + get_string('config_saved'))
         hashrate_list = [0] * len(avrport)
 
@@ -616,7 +624,7 @@ def load_config():
         avrport = avrport.replace(" ", "").split(',')
         donation_level = int(config["AVR Miner"]['donate'])
         debug = config["AVR Miner"]['debug'].lower()
-        rig_identifier = config["AVR Miner"]['identifier']
+        rig_identifier = config["AVR Miner"]['identifier'].split(',')
         Settings.SOC_TIMEOUT = int(config["AVR Miner"]["soc_timeout"])
         Settings.AVR_TIMEOUT = float(config["AVR Miner"]["avr_timeout"])
         Settings.DELAY_START = int(config["AVR Miner"]["delay_start"])
@@ -652,7 +660,7 @@ def greeting():
         + Style.BRIGHT + '\n  Unofficial Duino-Coin RPI I2C AVR Miner'
         + Style.RESET_ALL + Fore.MAGENTA
         + f' {Settings.VER}' + Fore.RESET
-        + ' 2021-2022')
+        + ' 2021-current')
 
     print(
         Style.DIM + Fore.MAGENTA
@@ -673,7 +681,7 @@ def greeting():
         + Settings.BLOCK + Style.NORMAL
         + Fore.RESET + get_string('avr_on_port')
         + Style.BRIGHT + Fore.YELLOW
-        + ' '.join(avrport))
+        + ', '.join(avrport))
 
     if osname == 'nt' or osname == 'posix':
         print(
@@ -694,7 +702,15 @@ def greeting():
             Style.DIM + Fore.MAGENTA
             + Settings.BLOCK + Style.NORMAL
             + Fore.RESET + get_string('rig_identifier')
-            + Style.BRIGHT + Fore.YELLOW + rig_identifier)
+            + Style.BRIGHT + Fore.YELLOW
+            + ', '.join(rig_identifier))
+
+    print(
+        Style.DIM + Fore.MAGENTA
+        + Settings.BLOCK + Style.NORMAL
+        + Fore.RESET + get_string("using_config")
+        + Style.BRIGHT + Fore.YELLOW 
+        + str(Settings.DATA_DIR + '/Settings.cfg'))
 
     print(
         Style.DIM + Fore.MAGENTA
@@ -790,10 +806,6 @@ def share_print(id, type, accept, reject, total_hashrate,
     Produces nicely formatted CLI output for shares:
     HH:MM:S |avrN| ⛏ Accepted 0/0 (100%) ∙ 0.0s ∙ 0 kH/s ⚙ diff 0 k ∙ ping 0ms
     """
-    try:
-        diff = get_prefix("", int(diff), 0)
-    except:
-        diff = "?"
 
     try:
         total_hashrate = get_prefix("H/s", total_hashrate, 2)
@@ -1023,7 +1035,7 @@ def get_worker_cfg_global(i2c_bus, com):
     worker_cfg_global["worker_name"] = get_worker_name(i2c_bus, com)
     worker_cfg_global["valid"] = True
 
-def mine_avr(com, threadid, fastest_pool):
+def mine_avr(com, threadid, fastest_pool, thread_rigid):
     global hashrate
     global bad_crc8
     global i2c_retry_count
@@ -1109,7 +1121,7 @@ def mine_avr(com, threadid, fastest_pool):
                         motd = motd.replace("\n", "\n\t\t")
 
                     pretty_print("net" + str(threadid),
-                                 " MOTD: " + Fore.RESET
+                                 get_string("motd") + Fore.RESET
                                  + Style.NORMAL + str(motd),
                                  "success")
                 break
@@ -1282,7 +1294,7 @@ def mine_avr(com, threadid, fastest_pool):
                     continue
 
             try:
-                computetime = round(int(result[1]) / 1000000, 3)
+                computetime = round(int(result[1]) / 1000000, 5)
                 num_res = int(result[0])
                 hashrate_t = round(num_res / computetime, 2)
 
@@ -1326,7 +1338,7 @@ def mine_avr(com, threadid, fastest_pool):
                             + Settings.SEPARATOR
                             + f'RPI I2C AVR Miner {Settings.VER}'
                             + Settings.SEPARATOR
-                            + str(rig_identifier)
+                            + str(thread_rigid)
                             #+ str(port_num(com))
                             + Settings.SEPARATOR
                             + str(result[2]))
@@ -1484,7 +1496,7 @@ if __name__ == '__main__':
         for port in avrport:
             Thread(target=mine_avr,
                    args=(port, threadid,
-                         fastest_pool)).start()
+                         fastest_pool, rig_identifier[threadid])).start()
             threadid += 1
             if ((len(avrport) > 1) and (threadid != len(avrport))):
                 pretty_print('sys' + str(threadid),
