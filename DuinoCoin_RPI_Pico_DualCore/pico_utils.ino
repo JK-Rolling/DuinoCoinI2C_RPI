@@ -109,3 +109,20 @@ void Blink(uint8_t count, uint8_t pin = LED_BUILTIN) {
     sleep_ms(50);
   }
 }
+
+float LED_FADE = 0;
+bool repeating_timer_callback(struct repeating_timer *t) {
+  if (LED_FADE >= 0) {
+    LED_FADE = (LED_FADE * 0.9) - 0.1;
+  }
+  if (LED_FADE <= 1) {
+    LED_FADE = 0;
+  }
+  analogWrite(LED_PIN, LED_FADE);
+  return true;
+}
+
+void BlinkFade(void) {
+  if (!LED_EN) return;
+  LED_FADE = 255;
+}
