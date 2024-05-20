@@ -75,6 +75,8 @@ extern "C" {
 
 // prototype
 void Blink(uint8_t count, uint8_t pin);
+void BlinkFade(void);
+bool repeating_timer_callback(struct repeating_timer *t);
 
 static String DUCOID;
 static mutex_t serial_mutex;
@@ -87,6 +89,7 @@ byte i2c1_addr=0;
 bool core0_started = false, core1_started = false;
 uint32_t core0_shares = 0, core0_shares_ss = 0, core0_shares_local = 0;
 uint32_t core1_shares = 0, core1_shares_ss = 0, core1_shares_local = 0;
+struct repeating_timer timer;
 
 // Core0
 void setup() {
@@ -96,6 +99,7 @@ void setup() {
   // core status indicator
   if (LED_EN) {
     pinMode(LED_PIN, OUTPUT);
+    add_repeating_timer_ms(10, repeating_timer_callback, NULL, &timer);
   }
 
   // initialize pico internal temperature sensor
@@ -150,7 +154,7 @@ void loop() {
       core0_started = true;
       printMsg(F("core0 job done :"));
       printMsg(core0_response());
-      Blink(BLINK_SHARE_FOUND, LED_PIN);
+      BlinkFade();
       if (WDT_EN && wdt_pet) {
         watchdog_update();
       }
@@ -194,7 +198,7 @@ void loop1() {
       core1_started = true;
       printMsg(F("core1 job done :"));
       printMsg(core1_response());
-      Blink(BLINK_SHARE_FOUND, LED_PIN);
+      BlinkFade();
       if (WDT_EN && wdt_pet) {
         watchdog_update();
       }
