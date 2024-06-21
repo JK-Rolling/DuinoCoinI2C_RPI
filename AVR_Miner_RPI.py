@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RPI I2C Unofficial AVR Miner 4.0 © MIT licensed
+RPI I2C Unofficial AVR Miner 4.1 © MIT licensed
 Modified by JK-Rolling
 20210919
 
@@ -46,7 +46,7 @@ printlock = Semaphore(value=1)
 i2clock = Semaphore(value=1)
 
 
-# Python <4.0 check
+# Python <3.0 check
 f"Your Python version is too old. Duino-Coin Miner requires version 3.6 or above. Update your packages and try again"
 
 
@@ -105,7 +105,7 @@ def port_num(com):
 
 
 class Settings:
-    VER = '4.0'
+    VER = '4.1'
     SOC_TIMEOUT = 15
     REPORT_TIME = 120
     AVR_TIMEOUT = 3  # diff 8 * 100 / 340 h/s = 2.35 s
