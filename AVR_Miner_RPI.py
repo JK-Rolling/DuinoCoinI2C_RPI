@@ -30,6 +30,7 @@ from socket import socket
 from datetime import datetime
 from statistics import mean
 from signal import SIGINT, signal
+from collections import deque
 from time import ctime, sleep, strptime, time
 import pip
 
@@ -46,7 +47,7 @@ printlock = Semaphore(value=1)
 i2clock = Semaphore(value=1)
 
 
-# Python <3.0 check
+# Python <3.5 check
 f"Your Python version is too old. Duino-Coin Miner requires version 3.6 or above. Update your packages and try again"
 
 
@@ -105,10 +106,10 @@ def port_num(com):
 
 
 class Settings:
-    VER = '4.1'
-    SOC_TIMEOUT = 15
+    VER = '4.3'
+    SOC_TIMEOUT = 10
     REPORT_TIME = 120
-    AVR_TIMEOUT = 3  # diff 8 * 100 / 340 h/s = 2.35 s
+    AVR_TIMEOUT = 4  # diff 10 * 100 / 340 h/s = 2.95 s
     DELAY_START = 5  # 5 seconds start delay between worker to help kolka sync efficiency drop
     IoT_EN = "n"
     DATA_DIR = "Duino-Coin AVR Miner " + str(VER)
@@ -116,6 +117,7 @@ class Settings:
     ENCODING = "utf-8"
     I2C_WR_RDDCY = 2
     WORKER_CFG_SHARED = "y"
+    disable_title = False
     try:
         # Raspberry Pi latin users can't display this character
         "‖".encode(sys.stdout.encoding)
@@ -131,58 +133,92 @@ class Settings:
         # And some codecs same, for example the Latin-1 encoding don`t support emoji
         try:
             "⛏ ⚙".encode(sys.stdout.encoding) # if the terminal support emoji
-            PICK = " ⛏"
-            COG = " ⚙"
+            PICK = " ⛏ "
+            COG = " ⚙ "
         except UnicodeEncodeError: # else
             PICK = ""
-            COG = " @"
+            COG = " @ "
 
+def has_mining_key(username):
+    response = requests.get(
+        "https://server.duinocoin.com/mining_key"
+            + "?u=" + username,
+        timeout=10
+    ).json()
+    return response["has_key"]
+    
 def check_mining_key(user_settings):
     user_settings = user_settings["AVR Miner"]
 
-    if user_settings["mining_key"] == "None":
-        # user manually reset .cfg file key. re-encode it
-        mining_key = user_settings["mining_key"]
-        user_settings["mining_key"] = b64.b64encode(mining_key.encode("utf-8")).decode('utf-8')
-        config["AVR Miner"] = user_settings
-        with open(Settings.DATA_DIR + '/Settings.cfg',
-                "w") as configfile:
-            config.write(configfile)
-        print("sys0",
-            Style.RESET_ALL + get_string("config_saved"),
-            "info")
-        sleep(1.5)
+    if user_settings["mining_key"] != "None":
+        key = "&k=" + b64.b64decode(user_settings["mining_key"]).decode('utf-8')
+    else:
+        key = ''
 
-    key = b64.b64decode(user_settings["mining_key"]).decode('utf-8')
     response = requests.get(
         "https://server.duinocoin.com/mining_key"
             + "?u=" + user_settings["username"]
-            + "&k=" + key,
+            + key,
         timeout=10
     ).json()
+    debug_output(response)
+
+    if response["success"] and not response["has_key"]: # if the user doesn't have a mining key
+        user_settings["mining_key"] = "None"
+        config["AVR Miner"] = user_settings
+
+        with open(Settings.DATA_DIR + '/Settings.cfg',
+            "w") as configfile:
+            config.write(configfile)
+            print("sys0",
+                Style.RESET_ALL + get_string("config_saved"),
+                "info")
+        return
 
     if not response["success"]:
-        pretty_print(
-            "sys0",
-            get_string("invalid_mining_key"),
-            "error")
+        if response["message"] == "Too many requests":
+            debug_output("Skipping mining key check - getting 429")
+            return
 
-        retry = input("You want to retry? (y/n): ")
-        if retry == "y" or retry == "Y":
+        if user_settings["mining_key"] == "None":
+            pretty_print(
+                "sys0",
+                get_string("mining_key_required"),
+                "warning")
+
             mining_key = input("Enter your mining key: ")
             user_settings["mining_key"] = b64.b64encode(mining_key.encode("utf-8")).decode('utf-8')
             config["AVR Miner"] = user_settings
 
             with open(Settings.DATA_DIR + '/Settings.cfg',
-                    "w") as configfile:
+                      "w") as configfile:
                 config.write(configfile)
-            print("sys0",
-                Style.RESET_ALL + get_string("config_saved"),
-                "info")
-            sleep(1.5)
+                print("sys0",
+                    Style.RESET_ALL + get_string("config_saved"),
+                    "info")
             check_mining_key(config)
         else:
-            return
+            pretty_print(
+                "sys0",
+                get_string("invalid_mining_key"),
+                "error")
+
+            retry = input("Do you want to retry? (y/n): ")
+            if retry == "y" or retry == "Y":
+                mining_key = input("Enter your mining key: ")
+                user_settings["mining_key"] = b64.b64encode(mining_key.encode("utf-8")).decode('utf-8')
+                config["AVR Miner"] = user_settings
+
+                with open(Settings.DATA_DIR + '/Settings.cfg',
+                        "w") as configfile:
+                    config.write(configfile)
+                print("sys0",
+                    Style.RESET_ALL + get_string("config_saved"),
+                    "info")
+                sleep(1.5)
+                check_mining_key(config)
+            else:
+                return
 
 
 class Client:
@@ -309,8 +345,8 @@ class Donate:
 shares = [0, 0, 0]
 bad_crc8 = 0
 i2c_retry_count = 0
-hashrate_mean = []
-ping_mean = []
+hashrate_mean = deque(maxlen=25)
+ping_mean = deque(maxlen=25)
 diff = 0
 shuffle_ports = "y"
 donator_running = False
@@ -369,6 +405,8 @@ try:
             lang = 'italian'
         elif locale.startswith('pt'):
             lang = 'portuguese'
+        elif locale.startswith("zh_TW"):
+            lang = "chinese_Traditional"
         elif locale.startswith('zh'):
             lang = 'chinese_simplified'
         elif locale.startswith('th'):
@@ -440,24 +478,26 @@ def ondemand_print(text: str):
           + Style.NORMAL + f'DEBUG: {text}')
 
 def title(title: str):
-    if osname == 'nt':
-        """
-        Changing the title in Windows' cmd
-        is easy - just use the built-in
-        title command
-        """
-        ossystem('title ' + title)
-    else:
-        """
-        Most *nix terminals use
-        this escape sequence to change
-        the console window title
-        """
-        try:
-            print('\33]0;' + title + '\a', end='')
-            sys.stdout.flush()
-        except Exception as e:
-            print(e)
+    if not Settings.disable_title:
+        if osname == 'nt':
+            """
+            Changing the title in Windows' cmd
+            is easy - just use the built-in
+            title command
+            """
+            ossystem('title ' + title)
+        else:
+            """
+            Most *nix terminals use
+            this escape sequence to change
+            the console window title
+            """
+            try:
+                print('\33]0;' + title + '\a', end='')
+                sys.stdout.flush()
+            except Exception as e:
+                debug_output("Error setting title: " +str(e))
+                Settings.disable_title = True
 
 
 def handler(signal_received, frame):
@@ -511,12 +551,12 @@ def load_config():
             if not correct_username:
                 print(get_string("incorrect_username"))
 
-        mining_key = input(Style.RESET_ALL + Fore.YELLOW
+        mining_key = "None"
+        if has_mining_key(username):
+            mining_key = input(Style.RESET_ALL + Fore.YELLOW
                            + get_string("ask_mining_key")
                            + Fore.RESET + Style.BRIGHT)
-        if not mining_key:
-            mining_key = "None"
-        mining_key = b64.b64encode(mining_key.encode("utf-8")).decode('utf-8')
+            mining_key = b64.b64encode(mining_key.encode("utf-8")).decode('utf-8')
         
         i2c = input(
             Style.RESET_ALL + Fore.YELLOW
@@ -542,7 +582,7 @@ def load_config():
                 
             confirm_identifier = input(
                 Style.RESET_ALL + Fore.YELLOW
-                + get_string('ask_rig_identifier')
+                + get_string('ask_rig_identifier') + ":"
                 + Fore.RESET + Style.BRIGHT)
             if confirm_identifier == 'y' or confirm_identifier == 'Y':
                 current_identifier = input(
@@ -567,11 +607,11 @@ def load_config():
                 
         Settings.IoT_EN = input(
             Style.RESET_ALL + Fore.YELLOW
-            + 'Do you want to turn on Duino IoT feature? (Y/n): '
+            + 'Do you want to turn on Duino IoT feature? (y/N): '
             + Fore.RESET + Style.BRIGHT)
         Settings.IoT_EN = Settings.IoT_EN.lower()
-        if len(Settings.IoT_EN) == 0: Settings.IoT_EN = "y"
-        elif Settings.IoT_EN.lower() != "y": Settings.IoT_EN = "n"
+        if len(Settings.IoT_EN) == 0: Settings.IoT_EN = "n"
+        elif Settings.IoT_EN.lower() != "n": Settings.IoT_EN = "y"
 
         donation_level = '0'
         if osname == 'nt' or osname == 'posix':
@@ -697,13 +737,12 @@ def greeting():
         + Style.BRIGHT + Fore.YELLOW
         + 'DUCO-S1A ⚙ AVR diff')
 
-    if rig_identifier != "None":
+    if rig_identifier[0] != "None" or len(rig_identifier) > 1:
         print(
             Style.DIM + Fore.MAGENTA
             + Settings.BLOCK + Style.NORMAL
             + Fore.RESET + get_string('rig_identifier')
-            + Style.BRIGHT + Fore.YELLOW
-            + ', '.join(rig_identifier))
+            + Style.BRIGHT + Fore.YELLOW + ", ".join(rig_identifier))
 
     print(
         Style.DIM + Fore.MAGENTA
@@ -800,12 +839,16 @@ def worker_print(com, **kwargs):
               + text)
         printlock.release()
 
-def share_print(id, type, accept, reject, total_hashrate,
-                computetime, diff, ping, reject_cause=None, iot_data=None):
+def share_print(id, type, accept, reject, thread_hashrate,
+                total_hashrate, computetime, diff, ping, reject_cause=None, iot_data=None):
     """
     Produces nicely formatted CLI output for shares:
     HH:MM:S |avrN| ⛏ Accepted 0/0 (100%) ∙ 0.0s ∙ 0 kH/s ⚙ diff 0 k ∙ ping 0ms
     """
+    try:
+        thread_hashrate = get_prefix("H/s", thread_hashrate, 2)
+    except:
+        thread_hashrate = "? H/s"
 
     try:
         total_hashrate = get_prefix("H/s", total_hashrate, 2)
@@ -832,16 +875,17 @@ def share_print(id, type, accept, reject, total_hashrate,
     with thread_lock():
         printlock.acquire()
         print(Fore.WHITE + datetime.now().strftime(Style.DIM + "%H:%M:%S ")
-              + Fore.WHITE + Style.BRIGHT + Back.MAGENTA + Fore.RESET
-              + " avr" + str(id) + " " + Back.RESET
-              + fg_color + Settings.PICK + share_str + Fore.RESET
+              + Style.RESET_ALL + Fore.WHITE + Style.BRIGHT + Back.MAGENTA
+              + " avr" + str(id) + " " + Style.RESET_ALL + fg_color 
+              + Settings.PICK + share_str + Fore.RESET
               + str(accept) + "/" + str(accept + reject) + Fore.MAGENTA
               + " (" + str(round(accept / (accept + reject) * 100)) + "%)"
               + Style.NORMAL + Fore.RESET
               + " ∙ " + str("%04.1f" % float(computetime)) + "s"
               + Style.NORMAL + " ∙ " + Fore.BLUE + Style.BRIGHT
-              + str(total_hashrate) + Fore.RESET + Style.NORMAL
-              + Settings.COG + f" diff {diff} ∙ "
+              + f"{thread_hashrate}" + Style.DIM
+              + f" ({total_hashrate} {get_string('hashrate_total')})" + Fore.RESET + Style.NORMAL
+              + Settings.COG + f" {get_string('diff')} {diff} ∙ "
               + f"{iot_text}" + Fore.CYAN
               + f"ping {(int(ping))}ms")
         printlock.release()
@@ -1107,7 +1151,7 @@ def mine_avr(com, threadid, fastest_pool, thread_rigid):
                             'success')
                     else:
                         pretty_print(
-                            'sys0', f' Miner is outdated (v{Settings.VER}) -'
+                            'sys0', f"{get_string('miner_is_outdated')} (v{Settings.VER}) -"
                             + get_string('server_is_on_version')
                             + server_version + Style.NORMAL
                             + Fore.RESET + get_string('update_warning'),
@@ -1311,12 +1355,9 @@ def mine_avr(com, threadid, fastest_pool, thread_rigid):
                     avr_timeout = _avr_timeout
 
                 hashrate_mean.append(hashrate_t)
-                hashrate = mean(hashrate_mean[-5:])
-                if len(hashrate_mean) > 5:
-                    hashrate_mean = hashrate_mean[-5:]
-                if (hashrate < 6000) and (hashrate_t >= 6000):
-                    hashrate_t = 5990 + round(random.random(),2)
+                hashrate = mean(hashrate_mean)
                 hashrate_list[threadid] = hashrate
+                total_hashrate = sum(hashrate_list)
             except Exception as e:
                 pretty_print('sys' + port_num(com),
                              get_string('mining_avr_connection_error')
@@ -1350,7 +1391,7 @@ def mine_avr(com, threadid, fastest_pool, thread_rigid):
                 time_delta = (responsetimestop -
                               responsetimetart).microseconds
                 ping_mean.append(round(time_delta / 1000))
-                ping = mean(ping_mean[-10:])
+                ping = mean(ping_mean)
                 diff = get_prefix("", int(diff), 0)
                 debug_output(com + f': retrieved feedback: {" ".join(feedback)}')
             except Exception as e:
@@ -1365,28 +1406,33 @@ def mine_avr(com, threadid, fastest_pool, thread_rigid):
             if feedback[0] == 'GOOD':
                 shares[0] += 1
                 share_print(port_num(com), "accept",
-                            shares[0], shares[1], hashrate,
+                            shares[0], shares[1], hashrate, total_hashrate,
                             computetime, diff, ping, None, iot_data)
             elif feedback[0] == 'BLOCK':
                 shares[0] += 1
                 shares[2] += 1
                 share_print(port_num(com), "block",
-                            shares[0], shares[1], hashrate,
+                            shares[0], shares[1], hashrate, total_hashrate,
                             computetime, diff, ping, None, iot_data)
             elif feedback[0] == 'BAD':
                 shares[1] += 1
                 reason = feedback[1] if len(feedback) > 1 else None
                 share_print(port_num(com), "reject",
-                            shares[0], shares[1], hashrate_t,
+                            shares[0], shares[1], hashrate_t, total_hashrate,
                             computetime, diff, ping, reason, iot_data)
             else:
                 shares[1] += 1
                 share_print(port_num(com), "reject",
-                            shares[0], shares[1], hashrate_t,
+                            shares[0], shares[1], hashrate_t, total_hashrate,
                             computetime, diff, ping, feedback, iot_data)
                 debug_output(com + f': Job: {job}')
                 debug_output(com + f': Result: {result}')
                 flush_i2c(i2c_bus,com,5)
+                
+            if shares[0] % 100 == 0 and shares[0] > 1:
+                pretty_print("sys0",
+                            f"{get_string('surpassed')} {shares[0]} {get_string('surpassed_shares')}",
+                            "success")
 
             title(get_string('duco_avr_miner') + str(Settings.VER)
                   + f') - {shares[0]}/{(shares[0] + shares[1])}'
